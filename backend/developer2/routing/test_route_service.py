@@ -118,3 +118,23 @@ assert len(result["alerts"]) == 1
 assert result["alerts"][0]["severity"] == "high"
 
 print("Route service test passed!")
+
+print("\n================================")
+print("Testing REAL Dev1 API integration")
+print("================================")
+
+real_result = calculate_route(
+    graph,
+    "A",
+    "C",
+    wheelchair=True,
+)
+
+print("Real API routing result:")
+print(real_result)
+
+assert real_result is not None
+assert "success" in real_result
+assert "blockages" in real_result
+
+print("\nReal API integration test passed!")

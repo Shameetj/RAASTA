@@ -11,6 +11,7 @@ from dijkstra import dijkstra
 from collision import detect_route_blockages
 from detour import find_alternative_route
 from alerts import create_blockage_alert
+from blockage_client import get_blockages_for_route
 
 
 def get_route_coordinates(graph, path):
@@ -37,7 +38,7 @@ def calculate_route(
     graph,
     start,
     destination,
-    active_blockages,
+    active_blockages=None,
     wheelchair=True,
 ):
     """
@@ -66,6 +67,11 @@ def calculate_route(
         graph,
         initial_route["path"],
     )
+
+    if active_blockages is None:
+        active_blockages = get_blockages_for_route(
+            route_coordinates
+        )
 
     # Step 3: Check the route for active blockages
     detected_blockages = detect_route_blockages(
