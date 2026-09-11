@@ -58,12 +58,16 @@ def find_alternative_route(
     graph,
     start,
     destination,
-    blockage_coordinates,
+    detected_blockages,
     threshold=DEFAULT_BLOCKAGE_THRESHOLD,
 ):
     """
-    Find an accessible route while avoiding edges
-    affected by a reported blockage.
+    Find an accessible alternative route while avoiding
+    edges affected by detected blockages.
+
+    detected_blockages:
+        List of blockage dictionaries received from
+        collision.detect_route_blockages().
     """
 
     alternative_graph = Graph()
@@ -77,17 +81,49 @@ def find_alternative_route(
             node["name"],
         )
 
-    # Copy edges except those affected by the blockage
+    # Copy edges except those affected by blockages
     for from_node, edges in graph.edges.items():
         for edge in edges:
 
-            if edge_is_near_blockage(
-                graph,
-                from_node,
-                edge["to"],
-                blockage_coordinates,
-                threshold,
-            ):
+            edge_blocked = False
+
+            for blockage in detected_blockages:
+
+                blockage_coordinates = (
+                    blockage["latitude"],
+                    blockage["longitude"],
+                )
+
+                distance_from = calculate_haversine_distance(
+                    (
+                        graph.nodes[from_node]["lat"],
+                        graph.nodes[from_node]["lng"],
+                    ),
+                    blockage_coordinates,
+                )
+
+                distance_to = calculate_haversine_distance(
+                    (
+                        graph.nodes[edge["to"]]["lat"],
+                        graph.nodes[edge["to"]]["lng"],
+                    ),
+                    blockage_coordinates,
+                )
+
+                print(
+                    f"Checking edge {from_node} -> {edge['to']} | "
+                    f"distances: {distance_from:.2f}m, "
+                    f"{distance_to:.2f}m"
+                )
+
+                if (
+                    distance_from <= threshold
+                    or distance_to <= threshold
+                ):
+                    edge_blocked = True
+                    break
+
+            if edge_blocked:
                 continue
 
             alternative_graph.add_edge(
@@ -98,10 +134,19 @@ def find_alternative_route(
                 edge["accessible"],
             )
 
+    # Debug: show the filtered graph
+    print("Filtered graph:")
+    print(alternative_graph.edges)
+
     # Find an accessible route on the filtered graph
-    return dijkstra(
+    result = dijkstra(
         alternative_graph,
         start,
         destination,
         wheelchair=True,
     )
+
+    print("Dijkstra result:")
+    print(result)
+
+    return result

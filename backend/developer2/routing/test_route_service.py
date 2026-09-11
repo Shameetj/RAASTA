@@ -1,20 +1,21 @@
 import sys
 from pathlib import Path
 
-sys.path.append(
-    str(Path(__file__).resolve().parent.parent / "pathfinding")
-)
+# Allow imports from developer2 folders
+developer2_path = Path(__file__).resolve().parent.parent
+
+sys.path.append(str(developer2_path / "pathfinding"))
+sys.path.append(str(developer2_path / "accessibility"))
 
 from graph import Graph
-from detour import find_alternative_route
+from route_service import calculate_route
 
+
+# -------------------------
+# Create test graph
+# -------------------------
 
 graph = Graph()
-
-
-# -------------------------
-# Nodes
-# -------------------------
 
 graph.add_node("A", 15.0000, 73.0000, "Start")
 graph.add_node("B", 15.0000, 73.0010, "Blocked Path")
@@ -22,10 +23,7 @@ graph.add_node("C", 15.0000, 73.0020, "Destination")
 graph.add_node("D", 15.0010, 73.0010, "Accessible Alternative")
 
 
-# -------------------------
-# Normal route
-# -------------------------
-
+# Normal route: A -> B -> C
 graph.add_edge(
     "A",
     "B",
@@ -43,10 +41,7 @@ graph.add_edge(
 )
 
 
-# -------------------------
-# Alternative route
-# -------------------------
-
+# Alternative route: A -> D -> C
 graph.add_edge(
     "A",
     "D",
@@ -65,10 +60,10 @@ graph.add_edge(
 
 
 # -------------------------
-# Detected blockage
+# Dev1-style blockage
 # -------------------------
 
-detected_blockages = [
+active_blockages = [
     {
         "id": 1,
         "type": "stairs",
@@ -77,33 +72,49 @@ detected_blockages = [
         "latitude": 15.0000,
         "longitude": 73.0010,
         "severity": "high",
-        "distance_to_route_meters": 0.0,
+        "is_active": True,
+        "created_at": "2026-09-11T15:30:00Z",
     }
 ]
 
 
 # -------------------------
-# Find alternative route
+# Calculate route
 # -------------------------
 
-result = find_alternative_route(
+result = calculate_route(
     graph,
     "A",
     "C",
-    detected_blockages,
+    active_blockages,
+    wheelchair=True,
 )
 
 
-print("Alternative route:")
+# -------------------------
+# Display result
+# -------------------------
+
+print("Final routing result:")
 print(result)
 
 
 # -------------------------
-# Test
+# Tests
 # -------------------------
 
-assert result is not None
-assert result["path"] == ["A", "D", "C"]
-assert result["distance"] == 250
+assert result["success"] is True
 
-print("Detour test passed!")
+assert result["route"]["path"] == ["A", "D", "C"]
+
+assert result["route"]["distance"] == 250
+
+assert len(result["blockages"]) == 1
+
+assert result["blockages"][0]["type"] == "stairs"
+
+assert len(result["alerts"]) == 1
+
+assert result["alerts"][0]["severity"] == "high"
+
+print("Route service test passed!")
