@@ -140,16 +140,30 @@ export default function MapPage() {
   // Icons
   const startIcon = createDivIcon(
     `<div class="inline-flex items-center gap-1 bg-emerald-600 border-2 border-white text-white px-2.5 py-1 rounded-full shadow-xl font-bold text-xs whitespace-nowrap ring-4 ring-emerald-500/40 animate-pulse">
-      <span>📍 Start</span>
+      <span>📍 A: Start</span>
     </div>`,
-    [76, 28]
+    [88, 28]
+  );
+
+  const detourIcon = createDivIcon(
+    `<div class="inline-flex items-center gap-1 bg-teal-600 border-2 border-white text-white px-2 py-0.5 rounded-full shadow-xl font-bold text-xs whitespace-nowrap ring-4 ring-teal-500/40 animate-bounce">
+      <span>♿ D: Detour Ramp</span>
+    </div>`,
+    [120, 26]
+  );
+
+  const blockedIcon = createDivIcon(
+    `<div class="inline-flex items-center gap-1 bg-rose-600 border-2 border-white text-white px-2 py-0.5 rounded-full shadow-xl font-bold text-xs whitespace-nowrap ring-4 ring-rose-500/40">
+      <span>🚫 B: 18 Stairs</span>
+    </div>`,
+    [108, 26]
   );
 
   const destIcon = createDivIcon(
     `<div class="inline-flex items-center gap-1 bg-cyan-600 border-2 border-white text-white px-2.5 py-1 rounded-full shadow-xl font-bold text-xs whitespace-nowrap ring-4 ring-cyan-500/40">
-      <span>🏁 Destination</span>
+      <span>🏁 C: Destination</span>
     </div>`,
-    [102, 28]
+    [118, 28]
   );
 
   const obstacleIcon = createDivIcon(
@@ -205,7 +219,7 @@ export default function MapPage() {
               triggerHaptic([120, 50, 120]);
               showVisualToast({
                 title: 'Live Guidance Active',
-                subtitle: `Guiding along step-free corridor to ${destination.name}`,
+                subtitle: `Guiding along alternative step-free corridor (A ➔ D ➔ C) to ${destination.name}`,
                 type: 'info'
               });
             }
@@ -230,6 +244,45 @@ export default function MapPage() {
         </button>
       </div>
 
+      {/* Alternative Route Detour Banner (When not calculating) */}
+      {!isCalculatingRoute && !isNavSimulating && (
+        <div className="absolute top-16 left-3 right-3 z-[1000] p-2.5 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border shadow-2xl flex items-center justify-between gap-2.5 animate-fade-in transition-all border-emerald-500/70">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-400 flex items-center justify-center font-bold text-xs flex-shrink-0">
+              {activeRouteView === 'accessible' ? '♿' : '⚠️'}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                  {activeRouteView === 'accessible' ? 'Alternative Detour Active' : 'Blocked Path Preview'}
+                </span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-600 font-mono font-bold">
+                  {activeRouteView === 'accessible' ? 'A ➔ D ➔ C' : 'A ➔ B ➔ C'}
+                </span>
+              </div>
+              <div className="text-[11px] font-semibold text-white truncate">
+                {activeRouteView === 'accessible'
+                  ? 'Detouring via D (Ramp) to bypass 18 stairs at B'
+                  : 'Blocked for Wheelchairs (18 concrete stairs at B)'}
+              </div>
+            </div>
+          </div>
+          
+          {activeRouteView === 'fastest' ? (
+            <button
+              onClick={() => setActiveRouteView('accessible')}
+              className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] whitespace-nowrap shadow-md cursor-pointer transition-all flex-shrink-0"
+            >
+              Use A ➔ D ➔ C
+            </button>
+          ) : (
+            <span className="text-[10px] font-bold text-emerald-300 px-2 py-0.5 rounded-lg bg-emerald-950 border border-emerald-600 flex-shrink-0">
+              Safe 94/100
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Route Calculation Live Status Banner */}
       {isCalculatingRoute && (
         <div className="absolute top-16 left-3 right-3 z-[1000] p-3 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border border-emerald-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
@@ -250,7 +303,7 @@ export default function MapPage() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                Step {currentSimSegment + 1} of {routes.accessible.segments.length}
+                Step {currentSimSegment + 1} of {routes.accessible.segments.length} (A ➔ D ➔ C)
               </div>
               <div className="text-xs font-bold text-white leading-tight truncate">
                 {routes.accessible.segments[currentSimSegment]?.text}
@@ -287,7 +340,7 @@ export default function MapPage() {
             barrierList={barriers}
           />
 
-          {/* Route A: Direct / Fastest Path (Red / Dashed) */}
+          {/* Route A: Direct / Fastest Path (Red / Dashed) - Blocked at B */}
           {(activeRouteView === 'fastest' || activeRouteView === 'both') && (
             <Polyline
               positions={directRouteCoords}
@@ -300,7 +353,7 @@ export default function MapPage() {
             />
           )}
 
-          {/* Route B: Accessible Step-Free Path (Solid Emerald Green) */}
+          {/* Route B: Alternative Step-Free Path (Solid Emerald Green) - Detour A -> D -> C */}
           {(activeRouteView === 'accessible' || activeRouteView === 'both') && (
             <>
               {/* Casing / Glow */}
@@ -324,11 +377,11 @@ export default function MapPage() {
             </>
           )}
 
-          {/* Start Origin Marker */}
+          {/* Start Origin Marker (Point A) */}
           <Marker position={[origin.coordinates?.lat || startLat, origin.coordinates?.lng || startLng]} icon={startIcon}>
             <Popup>
               <div className="space-y-1">
-                <div className="text-[10px] font-bold uppercase text-emerald-400">📍 Start Location</div>
+                <div className="text-[10px] font-bold uppercase text-emerald-400">📍 Point A: Start Location</div>
                 <div className="text-xs font-bold text-white">{origin.name}</div>
                 <div className="text-[10px] text-slate-300">GPS: {origin.coordinates?.lat || startLat}, {origin.coordinates?.lng || startLng}</div>
                 <div className="text-[10px] text-emerald-300 font-semibold">{origin.address || 'Verified Step-Free Origin'}</div>
@@ -336,11 +389,35 @@ export default function MapPage() {
             </Popup>
           </Marker>
 
-          {/* Destination Marker */}
+          {/* Detour Node Marker (Point D: West Promenade Ramp) */}
+          <Marker position={[28.6338, 77.2180]} icon={detourIcon}>
+            <Popup>
+              <div className="space-y-1 max-w-[210px]">
+                <div className="text-[10px] font-bold uppercase text-teal-300">♿ Point D: Accessible Detour Ramp</div>
+                <div className="text-xs font-bold text-white">West Promenade Gentle Ramp</div>
+                <p className="text-[10px] text-slate-300">1:12 gentle slope with dual handrails. Selected by RAASTA backend to bypass 18 stairs at B.</p>
+                <div className="text-[9px] text-emerald-300 font-semibold">100% Step-Free Detour Active</div>
+              </div>
+            </Popup>
+          </Marker>
+
+          {/* Blocked Hazard Marker (Point B: 18 Stairs) */}
+          <Marker position={[28.6335, 77.2190]} icon={blockedIcon}>
+            <Popup>
+              <div className="space-y-1 max-w-[210px]">
+                <div className="text-[10px] font-bold uppercase text-rose-400">🚫 Point B: Hazard Blockage</div>
+                <div className="text-xs font-bold text-white">18 Concrete Steps (No Ramp)</div>
+                <p className="text-[10px] text-slate-300">Standard direct route (A ➔ B ➔ C) is blocked here for wheelchair users.</p>
+                <div className="text-[9px] text-rose-300 font-semibold">Bypassed by Alternative Route A ➔ D ➔ C</div>
+              </div>
+            </Popup>
+          </Marker>
+
+          {/* Destination Marker (Point C) */}
           <Marker position={[destLat, destLng]} icon={destIcon}>
             <Popup>
               <div className="space-y-1">
-                <div className="text-[10px] font-bold uppercase text-cyan-400">Destination</div>
+                <div className="text-[10px] font-bold uppercase text-cyan-400">🏁 Point C: Destination</div>
                 <div className="text-xs font-bold text-white">{destination.name}</div>
                 <div className="text-[10px] text-emerald-400 font-bold">★ {destination.accessibilityRating || 94}/100 Safe Score</div>
               </div>
@@ -351,7 +428,7 @@ export default function MapPage() {
           {isNavSimulating && (
             <Marker position={userLivePos} icon={userLiveIcon}>
               <Popup>
-                <div className="text-xs font-bold text-emerald-300">Live GPS Location</div>
+                <div className="text-xs font-bold text-emerald-300">Live GPS Location (A ➔ D ➔ C)</div>
               </Popup>
             </Marker>
           )}
@@ -440,11 +517,14 @@ export default function MapPage() {
             onClick={() => setActiveRouteView('accessible')}
             className={`p-2.5 rounded-xl border text-left transition-all touch-active cursor-pointer ${
               activeRouteView === 'accessible'
-                ? 'bg-emerald-950/50 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/50'
+                ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/60 shadow-lg shadow-emerald-950/40'
                 : 'bg-slate-900 border-slate-800 text-slate-400'
             }`}
           >
-            <div className="text-[10px] font-bold uppercase text-emerald-400">Route B (Step-Free ♿)</div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase text-emerald-400">Route B (Detour ♿)</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/80 text-emerald-300 font-mono">A➔D➔C</span>
+            </div>
             <div className="text-xs font-bold text-white mt-0.5">9 min • 94/100 Safe</div>
           </button>
 
@@ -452,12 +532,15 @@ export default function MapPage() {
             onClick={() => setActiveRouteView('fastest')}
             className={`p-2.5 rounded-xl border text-left transition-all touch-active cursor-pointer ${
               activeRouteView === 'fastest'
-                ? 'bg-rose-950/50 border-rose-500 text-rose-300 ring-1 ring-rose-500/50'
+                ? 'bg-rose-950/60 border-rose-500 text-rose-300 ring-2 ring-rose-500/60 shadow-lg shadow-rose-950/40'
                 : 'bg-slate-900 border-slate-800 text-slate-400'
             }`}
           >
-            <div className="text-[10px] font-bold uppercase text-rose-400">Route A (Direct 🚫)</div>
-            <div className="text-xs font-bold text-white mt-0.5">6 min • 18 Stairs</div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase text-rose-400">Route A (Direct 🚫)</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-900/80 text-rose-300 font-mono">A➔B➔C</span>
+            </div>
+            <div className="text-xs font-bold text-white mt-0.5">6 min • Blocked at B</div>
           </button>
         </div>
 

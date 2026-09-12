@@ -229,14 +229,24 @@ export const INITIAL_ACCESSIBLE_FEATURES = [
 export const MOCK_ROUTES_DATA = {
   fastest: {
     id: 'route-fastest',
-    name: 'Direct Route (Standard GPS)',
-    badge: 'Shortest Distance',
+    name: 'Direct Route (Standard GPS - Blocked at B)',
+    badge: 'Contains 18 Stairs 🚫',
     durationMinutes: 6,
     distanceMeters: 410,
     accessibilityScore: 32,
     scoreRating: 'Not Accessible for Wheelchairs',
     scoreColor: 'rose',
-    summary: 'Direct straight path, but requires climbing 18 steep concrete steps with no ramp.',
+    summary: 'Direct straight path (A ➔ B ➔ C), but blocked at Point B by 18 steep concrete steps with no ramp.',
+    pathSummary: 'A ➔ B ➔ C (Blocked by Stairs)',
+    pathNodes: ['A (Metro Concourse)', 'B (18 Stairs Hazard)', 'C (Library)'],
+    isBlocked: true,
+    blockedReason: '18 Concrete Steps at Point B (No Ramp)',
+    blockedNode: {
+      id: 'B',
+      name: '18 Concrete Steps (Hazard B)',
+      coordinates: { lat: 28.6335, lng: 77.2190 },
+      badge: 'Blocked at B 🚫'
+    },
     barriersCount: 2,
     stairsCount: 18,
     hasRamp: false,
@@ -252,22 +262,32 @@ export const MOCK_ROUTES_DATA = {
       { name: 'Broken ramp lip with 5cm sudden drop', type: 'broken_ramp', severity: 'High' }
     ],
     segments: [
-      { text: 'Exit Metro Gate 1 onto Main Concourse', distance: '80m', safe: true },
-      { text: '⚠️ Climb 18 steep concrete stairs (NO RAMP)', distance: '30m', safe: false, barrier: '18 Steps 🚫' },
+      { text: 'Exit Metro Gate 1 onto Main Concourse (A)', distance: '80m', safe: true },
+      { text: '⚠️ Climb 18 steep concrete stairs at Point B (NO RAMP)', distance: '30m', safe: false, barrier: '18 Steps 🚫' },
       { text: '⚠️ Narrow footpath with damaged ramp edge', distance: '150m', safe: false, barrier: '5cm Drop Lip ⚠️' },
-      { text: 'Arrive at Library (Side gate with 3 steps)', distance: '150m', safe: false, barrier: '3 Steps' }
+      { text: 'Arrive at Library Gate 3 (C) (Side gate with 3 steps)', distance: '150m', safe: false, barrier: '3 Steps' }
     ]
   },
   accessible: {
     id: 'route-accessible',
-    name: 'RAASTA Step-Free Route (Recommended)',
-    badge: '100% Step-Free & Verified',
+    name: 'Alternative Step-Free Route (A ➔ D ➔ C)',
+    badge: '100% Step-Free Detour ♿',
     durationMinutes: 9,
     distanceMeters: 580,
     accessibilityScore: 94,
     scoreRating: 'Safe & Wheelchair Accessible',
     scoreColor: 'emerald',
-    summary: 'Guides you through the West Promenade with gentle ramps, wide flat sidewalks, and an automatic level entrance.',
+    isAlternativeRoute: true,
+    pathSummary: 'A ➔ D ➔ C (Safe Detour)',
+    pathNodes: ['A (Metro Concourse)', 'D (West Promenade Ramp)', 'C (Library Main Hall)'],
+    bypassedBlockage: '18 Concrete Steps at Point B',
+    detourNode: {
+      id: 'D',
+      name: 'West Promenade Gentle Ramp',
+      coordinates: { lat: 28.6338, lng: 77.2180 },
+      badge: 'Step-Free Detour via D ♿'
+    },
+    summary: 'Alternative detour route (A ➔ D ➔ C) bypassing the 18 stairs at B through the West Promenade gentle ramp (D).',
     barriersCount: 0,
     stairsCount: 0,
     hasRamp: true,
@@ -283,11 +303,11 @@ export const MOCK_ROUTES_DATA = {
     ],
     barriers: [],
     segments: [
-      { text: 'Exit Metro Gate 1 via smooth ground ramp', distance: '60m', safe: true, highlight: 'Tactile curb cut' },
-      { text: 'Walk along shaded West Promenade (2.4m wide)', distance: '180m', safe: true, highlight: 'Smooth paved path' },
-      { text: 'Use verified gentle ramp (1:12 slope with handrails)', distance: '70m', safe: true, highlight: 'Verified Ramp ♿' },
-      { text: 'Continue along quiet, lit path with audible crossing', distance: '160m', safe: true, highlight: 'Flat ground' },
-      { text: 'Enter Library Main Hall (Automatic sliding door, level 0)', distance: '110m', safe: true, highlight: 'Step-Free Entrance' }
+      { text: 'Start at Metro Gate 1 Concourse (A) via smooth ground ramp', distance: '60m', safe: true, highlight: 'Tactile curb cut' },
+      { text: 'Detour along shaded West Promenade toward Ramp (D)', distance: '180m', safe: true, highlight: 'Smooth paved path' },
+      { text: 'Take verified 1:12 gentle ramp at Point D (bypasses stairs at B)', distance: '70m', safe: true, highlight: 'Detour Ramp D ♿' },
+      { text: 'Continue along lit corridor with audible crossing', distance: '160m', safe: true, highlight: 'Flat ground' },
+      { text: 'Arrive at Library Main Hall (C) via automatic sliding door', distance: '110m', safe: true, highlight: 'Step-Free Entrance' }
     ]
   }
 };

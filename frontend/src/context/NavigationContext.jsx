@@ -111,22 +111,62 @@ export function NavigationProvider({ children }) {
           (result.routes && result.routes[1] ? result.routes[1] : null)
         );
 
-        // Update state with backend coordinates
+        // 3. Extract path sequence nodes & blockage details
+        const altPathNodes = result.alternative_route?.path_nodes || 
+          result.alternative_route?.nodes || 
+          result.path_nodes || 
+          result.path || 
+          ['A (Metro Concourse)', 'D (West Promenade Ramp)', 'C (Destination)'];
+
+        const directPathNodes = result.direct_route?.path_nodes || 
+          result.direct_route?.nodes || 
+          ['A (Metro Concourse)', 'B (18 Stairs Hazard)', 'C (Destination)'];
+
+        const bypassedBlockage = result.alternative_route?.bypassed_blockage || 
+          result.direct_route?.blockage_reason || 
+          result.blocked_obstacle || 
+          (result.direct_route?.blockages_found && result.direct_route.blockages_found[0]) || 
+          '18 Concrete Steps at Point B';
+
+        // Update state with backend coordinates & alternative route detour information
         setRoutes(prev => ({
           fastest: {
             ...prev.fastest,
+            name: result.direct_route?.name || prev.fastest.name,
             durationMinutes: result.direct_route?.duration_minutes ?? prev.fastest.durationMinutes,
             distanceMeters: result.direct_route?.distance_meters ?? prev.fastest.distanceMeters,
             accessibilityScore: result.direct_route?.accessibility_score ?? (result.direct_route?.is_blocked ? 32 : 80),
+            isBlocked: result.direct_route?.is_blocked ?? true,
+            blockedReason: bypassedBlockage,
+            pathNodes: Array.isArray(directPathNodes) ? directPathNodes : prev.fastest.pathNodes,
+            pathSummary: Array.isArray(directPathNodes) ? directPathNodes.join(' ➔ ') : 'A ➔ B ➔ C (Blocked)',
+            blockedNode: result.direct_route?.blocked_node || {
+              id: 'B',
+              name: bypassedBlockage,
+              coordinates: { lat: 28.6335, lng: 77.2190 },
+              badge: 'Blocked at B 🚫'
+            },
             barriers: result.direct_route?.blockages_found?.map(name => ({ name, type: 'stairs', severity: 'Critical' })) || prev.fastest.barriers,
             coordinates: backendDirectCoords.length > 0 ? backendDirectCoords : prev.fastest.coordinates
           },
           accessible: {
             ...prev.accessible,
+            name: result.alternative_route?.name || 'Alternative Step-Free Route (A ➔ D ➔ C)',
             durationMinutes: result.alternative_route?.duration_minutes ?? result.duration_minutes ?? prev.accessible.durationMinutes,
             distanceMeters: result.alternative_route?.distance_meters ?? result.distance_meters ?? prev.accessible.distanceMeters,
             accessibilityScore: result.accessibility_score?.score ?? result.alternative_route?.accessibility_score ?? 94,
             scoreRating: result.accessibility_score?.grade ?? 'Safe & Wheelchair Accessible',
+            isAlternativeRoute: true,
+            bypassedBlockage: bypassedBlockage,
+            pathNodes: Array.isArray(altPathNodes) ? altPathNodes : prev.accessible.pathNodes,
+            pathSummary: Array.isArray(altPathNodes) ? altPathNodes.join(' ➔ ') : 'A ➔ D ➔ C (Safe Detour)',
+            detourNode: result.alternative_route?.detour_node || {
+              id: 'D',
+              name: 'West Promenade Ramp',
+              coordinates: { lat: 28.6338, lng: 77.2180 },
+              badge: 'Step-Free Detour via D ♿'
+            },
+            summary: result.alternative_route?.summary || `Alternative detour route (A ➔ D ➔ C) bypassing ${bypassedBlockage} via West Promenade Ramp (D).`,
             segments: (result.turn_by_turn || result.segments || result.steps)?.map(t => ({
               text: t.instruction || t.text || t.description,
               distance: t.distance || '100m',

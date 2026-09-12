@@ -70,6 +70,72 @@ export default function RouteResultsPage() {
         })}
       </div>
 
+      {/* Visual Detour Routing Flowchart (A -> D -> C vs A -> B -> C) */}
+      <div className="p-4 rounded-3xl bg-[#131b2e] border-2 border-emerald-500/60 shadow-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🔀</span>
+            <div>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                Detour Path Breakdown
+              </h3>
+              <div className="text-[10px] text-slate-400">Backend Obstacle Detection &amp; Rerouting</div>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700">
+            A ➔ D ➔ C
+          </span>
+        </div>
+
+        {/* Path Flow 1: Safe Alternative Route (A -> D -> C) */}
+        <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold text-emerald-400">
+            <span>✔ Alternative Route (Safe Detour)</span>
+            <span className="text-[10px] text-emerald-300 font-mono">100% Step-Free</span>
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold py-1">
+            <span className="px-2 py-1 rounded-lg bg-emerald-900/80 text-emerald-200 border border-emerald-600 whitespace-nowrap">
+              📍 A: Start
+            </span>
+            <span className="text-emerald-400 font-bold">➔</span>
+            <span className="px-2 py-1 rounded-lg bg-emerald-800 text-white border border-emerald-400 font-bold whitespace-nowrap shadow-sm">
+              ♿ D: West Promenade Ramp
+            </span>
+            <span className="text-emerald-400 font-bold">➔</span>
+            <span className="px-2 py-1 rounded-lg bg-emerald-900/80 text-emerald-200 border border-emerald-600 whitespace-nowrap">
+              🏁 C: {destination.name}
+            </span>
+          </div>
+          <div className="text-[10px] text-emerald-300">
+            Bypasses 18-step concrete stairs at B via 1:12 gentle ramp.
+          </div>
+        </div>
+
+        {/* Path Flow 2: Blocked Direct Route (A -> B -> C) */}
+        <div className="p-3 rounded-2xl bg-rose-950/30 border border-rose-900/40 space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold text-rose-400">
+            <span>✖ Direct Path (Blocked at B)</span>
+            <span className="text-[10px] text-rose-300 font-mono">Inaccessible 🚫</span>
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold py-1">
+            <span className="px-2 py-1 rounded-lg bg-slate-900 text-slate-300 border border-slate-700 whitespace-nowrap">
+              📍 A: Start
+            </span>
+            <span className="text-rose-400 font-bold">➔</span>
+            <span className="px-2 py-1 rounded-lg bg-rose-900 text-white border border-rose-500 font-bold whitespace-nowrap shadow-sm">
+              ⚠️ B: 18 Concrete Stairs
+            </span>
+            <span className="text-rose-400 font-bold">➔</span>
+            <span className="px-2 py-1 rounded-lg bg-slate-900 text-slate-300 border border-slate-700 whitespace-nowrap">
+              🏁 C: {destination.name}
+            </span>
+          </div>
+          <div className="text-[10px] text-rose-300">
+            Standard GPS route fails wheelchair accessibility due to 18 steep steps without a ramp.
+          </div>
+        </div>
+      </div>
+
       {/* Dual Route Result Comparison Cards */}
       <div className="space-y-3">
         
@@ -79,7 +145,7 @@ export default function RouteResultsPage() {
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
               <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                Recommended Step-Free Path
+                Alternative Step-Free Route (A ➔ D ➔ C)
               </h3>
             </div>
             <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700">
@@ -112,7 +178,7 @@ export default function RouteResultsPage() {
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
               <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Direct Route (Standard GPS)
+                Direct Route (A ➔ B ➔ C - Blocked)
               </h3>
             </div>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-800">
@@ -130,7 +196,7 @@ export default function RouteResultsPage() {
             </div>
             <div className="text-right">
               <div className="text-sm font-bold text-white">{fastest.durationMinutes} mins • {fastest.distanceMeters} m</div>
-              <div className="text-[10px] text-rose-400">2 Obstacles Detected</div>
+              <div className="text-[10px] text-rose-400">Blocked by 18 Stairs at B</div>
             </div>
           </div>
 

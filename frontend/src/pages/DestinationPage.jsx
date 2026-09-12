@@ -87,8 +87,8 @@ export default function DestinationPage() {
       // 2. Route is received and saved in NavigationContext state
       if (routeResult) {
         showVisualToast({
-          title: 'Route Calculated Successfully',
-          subtitle: `Optimal step-free path to ${destination.name} ready.`,
+          title: 'Alternative Route (A ➔ D ➔ C) Active',
+          subtitle: `Detouring around 18 stairs at B via West Promenade Ramp (D).`,
           type: 'success'
         });
         // 3. Open map ONLY on verified success
