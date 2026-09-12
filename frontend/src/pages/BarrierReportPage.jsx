@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { PRESET_BARRIER_PHOTOS } from '../data/mockData';
 import confetti from 'canvas-confetti';
-import { 
-  Camera, 
-  Upload, 
-  Sparkles, 
-  CheckCircle2, 
-  Clock, 
-  ArrowRight, 
-  MapPin, 
+import {
+  Camera,
+  Upload,
+  Sparkles,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  MapPin,
   AlertTriangle,
   X,
   Image as ImageIcon
@@ -18,6 +18,9 @@ import {
 export default function BarrierReportPage() {
   const {
     destination,
+    routes,
+    userLocation,
+    isNavSimulating,
     addBarrierReport,
     setCurrentStep,
     triggerHaptic,
@@ -71,19 +74,57 @@ export default function BarrierReportPage() {
         origin: { y: 0.65 },
         colors: ['#10b981', '#06b6d4', '#a855f7', '#f59e0b']
       });
-    } catch (err) {}
+    } catch (err) { }
 
     try {
+      // Prefer the latest real phone GPS position. If the guidance watcher
+      // has not produced a fix yet, request one directly from the browser.
+      let reportLocation = null;
+
+      if (isNavSimulating && userLocation?.lat != null && userLocation?.lng != null) {
+        reportLocation = {
+          lat: Number(userLocation.lat),
+          lng: Number(userLocation.lng)
+        };
+      } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        reportLocation = await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => resolve({
+              lat: Number(position.coords.latitude),
+              lng: Number(position.coords.longitude)
+            }),
+            () => resolve(null),
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 5000
+            }
+          );
+        });
+      }
+
+      const fallbackLocation = selectedPreset?.coordinates || {
+        lat: 15.4900,
+        lng: 73.8270
+      };
+
+      const finalReportLocation = reportLocation || {
+        lat: Number(fallbackLocation.lat),
+        lng: Number(fallbackLocation.lng)
+      };
+
+      console.log('[RAASTA] 📍 Report location:', finalReportLocation);
+
       await addBarrierReport({
         title: notes || (barrierType === 'stairs' ? 'Integration Test Stairs' : barrierType === 'broken_ramp' ? 'Damaged Ramp Lip' : 'Blocked Sidewalk Obstruction'),
         category: barrierType,
         type: barrierType,
         typeLabel: barrierType === 'stairs' ? 'Pedestrian Stairs' : 'Damaged Ramp',
         severity: severity,
-        locationName: locationName,
-        coordinates: selectedPreset?.coordinates || { lat: 15.4900, lng: 73.8270 },
-        latitude: selectedPreset?.coordinates?.lat ?? 15.4900,
-        longitude: selectedPreset?.coordinates?.lng ?? 73.8270,
+        locationName: reportLocation ? 'Current GPS Location' : locationName,
+        coordinates: finalReportLocation,
+        latitude: finalReportLocation.lat,
+        longitude: finalReportLocation.lng,
         imageUrl: photoPreview,
         description: notes || (barrierType === 'stairs' ? 'Stairs blocking accessible path' : 'Obstacle blocking accessible path')
       });
@@ -98,7 +139,7 @@ export default function BarrierReportPage() {
 
   return (
     <div className="p-4 space-y-4 pb-8 animate-fade-in">
-      
+
       {/* Page Header */}
       <div className="space-y-1">
         <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700/80 text-purple-400 text-[10px] font-bold">
@@ -125,7 +166,7 @@ export default function BarrierReportPage() {
               Barrier Report Submitted!
             </h3>
             <p className="text-xs text-slate-300">
-              Your report is registered. Active navigation has updated and routed wheelchair users around this obstacle.
+              Your report is registered at the current GPS location. Navigation will reroute when this blockage affects the user's path.
             </p>
           </div>
 
@@ -162,7 +203,7 @@ export default function BarrierReportPage() {
       ) : (
         /* Real Report Form */
         <form onSubmit={handleSubmit} className="space-y-4">
-          
+
           {/* Photo Preview & Real Mobile Camera Action */}
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -221,11 +262,10 @@ export default function BarrierReportPage() {
                     key={preset.id}
                     type="button"
                     onClick={() => handleSelectPreset(preset)}
-                    className={`p-2 rounded-xl border text-left transition-all touch-active ${
-                      selectedPreset.id === preset.id
+                    className={`p-2 rounded-xl border text-left transition-all touch-active ${selectedPreset.id === preset.id
                         ? 'bg-purple-950/40 border-purple-500 text-purple-300 ring-1 ring-purple-500'
                         : 'bg-slate-900/60 border-slate-800 text-slate-400'
-                    }`}
+                      }`}
                   >
                     <div className="text-[11px] font-bold truncate">{preset.title}</div>
                     <div className="text-[9px] text-slate-500">{preset.category}</div>
@@ -266,15 +306,14 @@ export default function BarrierReportPage() {
                     setSeverity(s);
                     triggerHaptic([40, 20]);
                   }}
-                  className={`py-2 px-1 rounded-xl border text-center text-xs font-bold uppercase transition-all touch-active ${
-                    severity === s
+                  className={`py-2 px-1 rounded-xl border text-center text-xs font-bold uppercase transition-all touch-active ${severity === s
                       ? s === 'critical'
                         ? 'bg-red-950/60 border-red-500 text-red-300 ring-1 ring-red-500'
                         : s === 'high'
-                        ? 'bg-amber-950/60 border-amber-500 text-amber-300 ring-1 ring-amber-500'
-                        : 'bg-cyan-950/60 border-cyan-500 text-cyan-300 ring-1 ring-cyan-500'
+                          ? 'bg-amber-950/60 border-amber-500 text-amber-300 ring-1 ring-amber-500'
+                          : 'bg-cyan-950/60 border-cyan-500 text-cyan-300 ring-1 ring-cyan-500'
                       : 'bg-slate-900 border-slate-800 text-slate-400'
-                  }`}
+                    }`}
                 >
                   {s}
                 </button>
@@ -316,12 +355,11 @@ export default function BarrierReportPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className={`w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-950/40 touch-active cursor-pointer ${
-              isSubmitting ? 'opacity-70 cursor-wait' : ''
-            }`}
+            className={`w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-950/40 touch-active cursor-pointer ${isSubmitting ? 'opacity-70 cursor-wait' : ''
+              }`}
           >
             <Camera className="w-4 h-4" />
-            <span>{isSubmitting ? 'Uploading to Dev1 & Rerouting...' : 'Submit Barrier Report'}</span>
+            <span>{isSubmitting ? 'Uploading to Dev1...' : 'Submit Barrier Report'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
 
