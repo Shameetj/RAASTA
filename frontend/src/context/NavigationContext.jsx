@@ -282,16 +282,8 @@ export function NavigationProvider({ children }) {
     requestRouteCalculation(destination, profileId);
   };
 
-  const triggerHaptic = (pattern = [120, 60, 120]) => {
-    setIsHapticVibrating(true);
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      try {
-        navigator.vibrate(pattern);
-      } catch (e) {}
-    }
-    setTimeout(() => {
-      setIsHapticVibrating(false);
-    }, 1100);
+  const triggerHaptic = () => {
+    // Haptic vibration disabled
   };
 
   const showVisualToast = (toastData) => {

@@ -4,7 +4,6 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   DoorOpen, 
-  Vibrate, 
   X,
   Radio
 } from 'lucide-react';
@@ -12,25 +11,12 @@ import {
 export default function VisualAlertBanner() {
   const {
     activeToast,
-    isHapticVibrating,
     emergencyStrobeActive,
-    setEmergencyStrobeActive,
-    triggerHaptic
+    setEmergencyStrobeActive
   } = useNavigation();
 
   return (
     <>
-      {/* 1. Mobile Visual Vibration Wave Indicator */}
-      {isHapticVibrating && (
-        <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center">
-          <div className="w-40 h-40 rounded-full border-4 border-cyan-400 opacity-80 animate-haptic-ring" />
-          <div className="w-28 h-28 rounded-full border-4 border-cyan-300 opacity-90 animate-haptic-ring" style={{ animationDelay: '0.15s' }} />
-          <div className="absolute top-14 px-3 py-1 rounded-full bg-cyan-500 text-slate-950 font-bold text-[11px] flex items-center gap-1 shadow-lg shadow-cyan-500/50 animate-pulse">
-            <Vibrate className="w-3.5 h-3.5" />
-            <span>HAPTIC VIBRATION</span>
-          </div>
-        </div>
-      )}
 
       {/* 2. Top Visual Alert Banner (Deaf / Universal Toast / API Errors) */}
       {activeToast && (

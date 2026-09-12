@@ -164,7 +164,7 @@ export default function HomePage() {
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 mt-0.5">
-                Visual turn banners, haptic turn buzz, and text notices
+                Visual turn banners, live subtitles, and hazard notices
               </p>
             </div>
           </div>

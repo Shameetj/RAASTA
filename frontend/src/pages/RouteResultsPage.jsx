@@ -5,7 +5,6 @@ import {
   AlertTriangle, 
   ArrowRight, 
   Sparkles, 
-  Vibrate, 
   DoorOpen, 
   Footprints, 
   Camera, 
@@ -326,7 +325,7 @@ export default function RouteResultsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* CONDITIONAL FEATURE 2: DEAF 🦻 ACCOMMODATIONS                              */}
+      {/* CONDITIONAL FEATURE 2: DEAF 🦻 ACCOMMODATIONS PANEL                        */}
       {/* ========================================================================= */}
       {selectedProfileId === 'deaf' && (
         <div className="p-4 rounded-3xl bg-[#131b2e] border border-cyan-500/40 space-y-3 shadow-md">
@@ -337,22 +336,12 @@ export default function RouteResultsPage() {
                 <h3 className="text-xs font-bold text-white font-display">
                   Deaf &amp; Hard of Hearing Suite
                 </h3>
-                <span className="text-[10px] text-cyan-400 font-medium">Visual &amp; Haptic Cues Active</span>
+                <span className="text-[10px] text-cyan-400 font-medium">Visual Alerts &amp; Captions Active</span>
               </div>
             </div>
-
-            <button
-              onClick={() => triggerHaptic([180, 80, 180])}
-              className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border flex items-center gap-1 ${
-                isHapticVibrating ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'bg-cyan-950 text-cyan-300 border-cyan-700'
-              }`}
-            >
-              <Vibrate className="w-3 h-3" />
-              <span>Feel Buzz</span>
-            </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             
             {/* 1. VISUAL ALERTS */}
             <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
@@ -370,26 +359,14 @@ export default function RouteResultsPage() {
               </button>
             </div>
 
-            {/* 2. VIBRATION */}
-            <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">Vibration 📳</div>
-              <div className="text-xs font-bold text-white">Turn Buzz</div>
-              <button
-                onClick={() => triggerHaptic([100, 50, 100, 50, 200])}
-                className="text-[10px] text-cyan-400 underline font-semibold"
-              >
-                ▶ Feel Pattern
-              </button>
-            </div>
-
-            {/* 3. ANNOUNCEMENTS */}
+            {/* 2. ANNOUNCEMENTS */}
             <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
               <div className="text-[10px] font-bold text-slate-400 uppercase">Signage 📢</div>
               <div className="text-xs font-bold text-white">Live Subtitles</div>
               <div className="text-[10px] text-cyan-400 font-medium">✓ Metro lift open</div>
             </div>
 
-            {/* 4. EMERGENCY */}
+            {/* 3. EMERGENCY */}
             <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
               <div className="text-[10px] font-bold text-slate-400 uppercase">Emergency ⚠️</div>
               <div className="text-xs font-bold text-white">Strobe Alert</div>

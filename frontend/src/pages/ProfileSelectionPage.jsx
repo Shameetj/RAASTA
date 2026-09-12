@@ -138,7 +138,7 @@ export default function ProfileSelectionPage() {
             </div>
           </div>
 
-          {/* Visual / Vibration Alerts */}
+          {/* Visual Navigation Cues */}
           <div 
             onClick={() => handleTogglePreference('visualHapticAlerts')}
             className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer touch-active ${
@@ -146,8 +146,8 @@ export default function ProfileSelectionPage() {
             }`}
           >
             <div>
-              <div className="text-xs font-bold text-white">Visual &amp; Vibration Cues 🦻</div>
-              <div className="text-[10px] text-slate-400">Gentle phone vibrations &amp; banners</div>
+              <div className="text-xs font-bold text-white">Visual Navigation Cues 🦻</div>
+              <div className="text-[10px] text-slate-400">High-visibility banners &amp; subtitles</div>
             </div>
             <div className={`w-8 h-4 rounded-full flex items-center p-0.5 ${preferences.visualHapticAlerts ? 'bg-cyan-500 justify-end' : 'bg-slate-800 justify-start'}`}>
               <div className="w-3 h-3 rounded-full bg-white" />

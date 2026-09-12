@@ -18,7 +18,6 @@ import {
   AlertTriangle,
   ChevronDown,
   Navigation as NavIcon,
-  Vibrate,
   Layers,
   Search
 } from 'lucide-react';
@@ -415,23 +414,12 @@ export default function MapPage() {
 
         {/* Deaf Mode Visual Alert Pill */}
         {selectedProfileId === 'deaf' && (
-          <div className="p-2.5 rounded-xl bg-cyan-950/70 border border-cyan-500/70 text-cyan-200 text-xs flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-base">🦻</span>
-              <div className="truncate">
-                <span className="font-bold text-cyan-300">Crosswalk ahead: </span>
-                <span>Walk signal active</span>
-              </div>
+          <div className="p-2.5 rounded-xl bg-cyan-950/70 border border-cyan-500/70 text-cyan-200 text-xs flex items-center gap-2">
+            <span className="text-base">🦻</span>
+            <div className="truncate">
+              <span className="font-bold text-cyan-300">Crosswalk ahead: </span>
+              <span>Walk signal active</span>
             </div>
-            <button
-              onClick={() => triggerHaptic([200, 100, 200])}
-              className={`px-2 py-1 rounded-lg text-[10px] font-bold border flex items-center gap-1 ${
-                isHapticVibrating ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'bg-cyan-900/60 text-cyan-300 border-cyan-700'
-              }`}
-            >
-              <Vibrate className="w-3 h-3" />
-              <span>Vibrate</span>
-            </button>
           </div>
         )}
 

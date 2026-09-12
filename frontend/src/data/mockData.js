@@ -29,13 +29,13 @@ export const ACCESSIBILITY_PROFILES = [
     name: 'Deaf / Hard of Hearing',
     icon: 'EarOff',
     symbol: '🦻',
-    badge: 'Visual & Vibration Cues',
+    badge: 'Visual Navigation Cues',
     color: 'cyan',
-    description: 'Replaces audio cues with high-visibility visual banners and tactile phone vibrations.',
+    description: 'Replaces audio cues with high-visibility visual banners and on-screen turn guidance.',
     features: [
       'Visual turn & crosswalk banners',
-      'Gentle vibration patterns for turns',
-      'High-contrast emergency alerts'
+      'High-contrast emergency alerts',
+      'Real-time text subtitles'
     ],
     defaultPreferences: {
       avoidStairs: false,
@@ -126,7 +126,7 @@ export const DEAF_MODE_ALERTS = [
   {
     id: 'alert-1',
     title: 'Crosswalk Ahead',
-    subtitle: 'Walk signal active. Vibration pattern sent.',
+    subtitle: 'Walk signal active. Visual banner displayed.',
     type: 'visual_cue',
     severity: 'info',
     timestamp: 'Just now'

@@ -3,7 +3,6 @@ import { useNavigation } from '../context/NavigationContext';
 import { 
   Sun, 
   Moon, 
-  Vibrate, 
   AlertTriangle, 
   BarChart3, 
   Accessibility, 
@@ -78,24 +77,10 @@ export default function MobileAppLayout({ children }) {
             <span className="text-[10px] text-emerald-400">{selectedProfile.symbol}</span>
           </button>
 
-          {/* Test Haptic Button */}
-          <button
-            onClick={() => triggerHaptic([150, 80, 150])}
-            className={`p-2 rounded-xl border transition-all touch-active ${
-              isHapticVibrating 
-                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 animate-pulse'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-cyan-400'
-            }`}
-            title="Test Vibration"
-          >
-            <Vibrate className="w-3.5 h-3.5" />
-          </button>
-
           {/* Emergency Alert Drill (Deaf Mode) */}
           <button
             onClick={() => {
               setEmergencyStrobeActive(true);
-              triggerHaptic([200]);
             }}
             className="p-2 rounded-xl bg-red-950/40 border border-red-800/40 text-red-400 hover:bg-red-900/50 touch-active"
             title="Emergency Strobe Drill"
