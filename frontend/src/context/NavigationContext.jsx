@@ -306,49 +306,82 @@ export function NavigationProvider({ children }) {
     }, 4000);
   };
 
-  // Add barrier report and dynamically trigger reroute
+  // Add barrier report to Dev1 and recalculate route dynamically
   const addBarrierReport = async (newBarrier) => {
-    const barrierObj = {
-      id: `barr-${Date.now()}`,
-      title: newBarrier.title || 'Reported Obstacle',
-      type: newBarrier.category || 'stairs',
-      typeLabel: newBarrier.typeLabel || 'Hazard Obstacle',
-      severity: newBarrier.severity || 'high',
-      severityLabel: `${newBarrier.severity?.toUpperCase()} Severity Barrier`,
-      locationName: newBarrier.locationName || `${destination.name} Corridor`,
-      coordinates: newBarrier.coordinates || { lat: 28.6342, lng: 77.2198 },
+    // 1. Convert coordinates: coordinates.lat -> latitude, coordinates.lng -> longitude
+    const lat = Number(newBarrier.latitude ?? newBarrier.coordinates?.lat ?? newBarrier.lat ?? 15.4900);
+    const lng = Number(newBarrier.longitude ?? newBarrier.coordinates?.lng ?? newBarrier.lng ?? 73.8270);
+    const rawType = (newBarrier.type || newBarrier.category || 'stairs').toLowerCase();
+    const typeLabel = newBarrier.typeLabel || (rawType === 'stairs' ? 'Pedestrian Stairs' : rawType === 'broken_ramp' ? 'Damaged Ramp' : 'Hazard Obstacle');
+    const severity = (newBarrier.severity || 'high').toLowerCase();
+    const severityLabel = `${severity.toUpperCase()} Severity Barrier`;
+    const title = newBarrier.title || 'Integration Test Stairs';
+    const description = newBarrier.description || (rawType === 'stairs' ? 'Stairs blocking accessible path' : 'Obstacle blocking accessible path');
+
+    const blockagePayload = {
+      type: rawType,
+      title: title,
+      description: description,
+      latitude: lat,
+      longitude: lng,
+      severity: severity
+    };
+
+    let backendId = null;
+
+    try {
+      // Step 1: POST /api/blockages to Dev1
+      const response = await reportBlockage(blockagePayload);
+      console.log('[RAASTA] Dev1 saved blockage response:', response);
+
+      // Step 2: Use the real ID returned from POST /api/blockages
+      backendId = response?.id ?? response?.blockage?.id ?? response?.data?.id ?? response?.blockage_id ?? response?._id;
+    } catch (err) {
+      console.error('[RAASTA] Failed to save blockage in Dev1:', err);
+      setApiError('Unable to connect to RAASTA server. Please try again.');
+      showVisualToast({
+        title: 'Report Failed',
+        subtitle: 'Unable to connect to RAASTA server. Please try again.',
+        type: 'error'
+      });
+      throw err;
+    }
+
+    const officialBarrier = {
+      id: backendId || `dev1-blockage-${lat.toFixed(4)}-${lng.toFixed(4)}`,
+      title: title,
+      type: rawType,
+      typeLabel: typeLabel,
+      severity: severity,
+      severityLabel: severityLabel,
+      locationName: newBarrier.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+      coordinates: { lat, lng },
       reportedAt: 'Just Now',
-      verificationStatus: 'AI Verified (96% Confidence)',
+      verificationStatus: 'Verified by Dev1 Backend',
       decayStatus: 'Fresh',
-      description: newBarrier.description || 'Reported via mobile camera AI scan.',
+      description: description,
       imageUrl: newBarrier.imageUrl,
       isOnRouteA: false,
       isOnRouteB: true
     };
 
-    // Call backend API (if available)
-    await reportBlockage(barrierObj);
+    setBarriers(prev => [officialBarrier, ...prev.filter(b => b.id !== officialBarrier.id)]);
 
-    setBarriers(prev => [barrierObj, ...prev]);
-
-    // Dynamic Route Recalculation
-    setRoutes(prev => ({
-      ...prev,
-      accessible: {
-        ...prev.accessible,
-        durationMinutes: 10,
-        distanceMeters: 620,
-        accessibilityScore: 92,
-        summary: `Dynamic Reroute: Bypassing newly reported "${barrierObj.title}" via East Promenade.`,
-        barriers: [{ name: barrierObj.title, type: barrierObj.type, severity: barrierObj.severity }]
-      }
-    }));
+    // Step 3: Recalculate route via POST /api/routes/calculate
+    // Flow: User reports blockage -> POST /api/blockages -> Dev1 saves it -> POST /api/routes/calculate -> Backend sees new blockage -> Alternative route -> Map updates
+    try {
+      await requestRouteCalculation(destination, selectedProfileId);
+    } catch (routeErr) {
+      console.error('[RAASTA] Recalculating route after blockage report failed:', routeErr);
+    }
 
     showVisualToast({
-      title: 'Barrier Uploaded & Rerouted!',
-      subtitle: `AI classified as ${barrierObj.title}. Route B adapted.`,
+      title: 'Blockage Reported & Route Recalculated!',
+      subtitle: `Registered in Dev1. Alternative route displayed.`,
       type: 'success'
     });
+
+    return officialBarrier;
   };
 
   // Navigation simulation loop

@@ -360,15 +360,17 @@ export const PRESET_BARRIER_PHOTOS = [
     id: 'sample-1',
     title: '18-Step Flight of Stairs',
     category: 'stairs',
-    severity: 'critical',
+    severity: 'high',
+    coordinates: { lat: 15.4900, lng: 73.8270 },
     imageUrl: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=600&auto=format&fit=crop&q=80',
-    description: '18 concrete steps with no accompanying ramp or lift.'
+    description: 'Stairs blocking accessible path'
   },
   {
     id: 'sample-2',
     title: 'Broken Ramp Edge',
     category: 'broken_ramp',
     severity: 'high',
+    coordinates: { lat: 15.4912, lng: 73.8285 },
     imageUrl: 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=600&auto=format&fit=crop&q=80',
     description: 'Cracked concrete lip causing a 5cm drop hazard.'
   },
@@ -377,6 +379,7 @@ export const PRESET_BARRIER_PHOTOS = [
     title: 'Sidewalk Blocked by Construction',
     category: 'blocked_sidewalk',
     severity: 'high',
+    coordinates: { lat: 15.4888, lng: 73.8255 },
     imageUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb180c5f5?w=600&auto=format&fit=crop&q=80',
     description: 'Construction sand & barrier blocking most of the walkway.'
   },
@@ -385,6 +388,7 @@ export const PRESET_BARRIER_PHOTOS = [
     title: 'Scooters on Tactile Tiles',
     category: 'blocked_sidewalk',
     severity: 'medium',
+    coordinates: { lat: 15.4925, lng: 73.8295 },
     imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=600&auto=format&fit=crop&q=80',
     description: 'Parked two-wheelers blocking the yellow guiding path.'
   }

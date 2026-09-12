@@ -79,6 +79,24 @@ export async function calculateRoute({ start, destination, profile }) {
 }
 
 export async function reportBlockage(blockageData) {
+  // Convert coordinates.lat -> latitude and coordinates.lng -> longitude
+  const lat = blockageData.latitude !== undefined 
+    ? Number(blockageData.latitude)
+    : (blockageData.coordinates?.lat !== undefined ? Number(blockageData.coordinates.lat) : Number(blockageData.lat ?? 15.4900));
+
+  const lng = blockageData.longitude !== undefined
+    ? Number(blockageData.longitude)
+    : (blockageData.coordinates?.lng !== undefined ? Number(blockageData.coordinates.lng) : Number(blockageData.lng ?? 73.8270));
+
+  const payload = {
+    type: (blockageData.type || blockageData.category || 'stairs').toLowerCase(),
+    title: blockageData.title || 'Integration Test Stairs',
+    description: blockageData.description || 'Stairs blocking accessible path',
+    latitude: !isNaN(lat) ? lat : 15.4900,
+    longitude: !isNaN(lng) ? lng : 73.8270,
+    severity: (blockageData.severity || 'high').toLowerCase()
+  };
+
   try {
     const res = await fetch(`${BASE_URL}/blockages`, {
       method: 'POST',
@@ -86,8 +104,8 @@ export async function reportBlockage(blockageData) {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify(blockageData),
-      signal: AbortSignal.timeout(4000)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(6000)
     });
     if (!res.ok) {
       throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
