@@ -1,25 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigation } from '../context/NavigationContext';
-import { DEMO_DESTINATIONS, ACCESSIBILITY_PROFILES } from '../data/mockData';
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
   Polyline,
-  useMap
+  useMap,
+  useMapEvents
 } from 'react-leaflet';
 import L from 'leaflet';
 import { normalizeCoordinatesList } from '../utils/geoUtils';
 import {
   Play,
   Square,
-  Camera,
   AlertTriangle,
-  ChevronDown,
-  Navigation as NavIcon,
-  Layers,
-  Search
 } from 'lucide-react';
 
 // Leaflet Map Resizer to ensure tiles render immediately when tab switches
@@ -37,6 +32,19 @@ function MapResizer() {
       window.removeEventListener('resize', onResize);
     };
   }, [map]);
+  return null;
+}
+
+function DestinationMapPicker({ onSelect }) {
+  useMapEvents({
+    click(e) {
+      onSelect({
+        lat: e.latlng.lat,
+        lng: e.latlng.lng
+      });
+    }
+  });
+
   return null;
 }
 
@@ -93,6 +101,54 @@ function MapBoundsUpdater({ originCoords, destCoords, accessibleCoords, directCo
   return null;
 }
 
+// Fit the map to the current location and selected destination only when
+// the destination/route changes. It intentionally does NOT depend on
+// live GPS position, so the map does not jump every time the user moves.
+function DestinationBoundsUpdater({
+  currentCoords,
+  destCoords,
+  accessibleCoords,
+  destinationKey,
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!destinationKey || !destCoords?.lat || !destCoords?.lng) {
+      return;
+    }
+
+    const points = [[destCoords.lat, destCoords.lng]];
+
+    if (currentCoords?.lat != null && currentCoords?.lng != null) {
+      points.push([currentCoords.lat, currentCoords.lng]);
+    }
+
+    if (Array.isArray(accessibleCoords) && accessibleCoords.length > 0) {
+      accessibleCoords.forEach((p) => {
+        if (Array.isArray(p) && p.length >= 2) {
+          points.push(p);
+        }
+      });
+    }
+
+    try {
+      const bounds = L.latLngBounds(points);
+
+      // Keep both the current location and destination visible after
+      // selecting a destination / receiving a new route.
+      map.fitBounds(bounds, {
+        padding: [45, 45],
+        maxZoom: 17,
+        animate: true,
+      });
+    } catch (e) {
+      console.warn('[Map] Destination bounds warning:', e);
+    }
+  }, [destinationKey, destCoords, accessibleCoords, map]);
+
+  return null;
+}
+
 // Leaflet DivIcon helper
 const createDivIcon = (htmlContent, size = [36, 36]) => {
   return L.divIcon({
@@ -122,53 +178,130 @@ export default function MapPage() {
     startGpsGuidance,
     stopGpsGuidance,
     setIsNavSimulating,
-    currentSimSegment,
     triggerHaptic,
     showVisualToast,
     isCalculatingRoute,
-    isHapticVibrating
+    isHapticVibrating,
+    requestRouteCalculation
   } = useNavigation();
 
-  const [activeRouteView, setActiveRouteView] = useState('accessible'); // 'accessible' | 'fastest'
-  const [destPickerOpen, setDestPickerOpen] = useState(false);
+  const [hasSelectedMapDestination, setHasSelectedMapDestination] = useState(false);
+  const [routeReadyForDestination, setRouteReadyForDestination] = useState(false);
 
-  const startLat = origin.coordinates?.lat || 15.4910;
-  const startLng = origin.coordinates?.lng || 73.8260;
-  const destLat = destination.coordinates?.lat || 15.4950;
-  const destLng = destination.coordinates?.lng || 73.8310;
+  // Prefer the latest real browser/mobile GPS position over the old
+  // configured/demo origin. This keeps the map and route start aligned.
+  const startLat =
+    userLocation?.lat != null
+      ? Number(userLocation.lat)
+      : (origin?.coordinates?.lat || 15.4910);
+  const startLng =
+    userLocation?.lng != null
+      ? Number(userLocation.lng)
+      : (origin?.coordinates?.lng || 73.8260);
+  const destLat = destination?.coordinates?.lat;
+  const destLng = destination?.coordinates?.lng;
 
-  // Real backend route coordinates
-  const accessibleRouteCoords = routes?.accessible?.coordinates && routes.accessible.coordinates.length >= 2
+  useEffect(() => {
+    if (!hasSelectedMapDestination || !destLat || !destLng) {
+      setRouteReadyForDestination(false);
+      return;
+    }
+
+    const coords = routes?.accessible?.coordinates;
+
+    if (!Array.isArray(coords) || coords.length < 2) {
+      setRouteReadyForDestination(false);
+      return;
+    }
+
+    // Only accept the route when its final point is actually near the
+    // newly selected destination. This prevents the previous destination's
+    // route from briefly appearing after the user taps a new location.
+    const normalized = normalizeCoordinatesList(coords);
+    const lastPoint = normalized[normalized.length - 1];
+
+    if (!Array.isArray(lastPoint) || lastPoint.length < 2) {
+      setRouteReadyForDestination(false);
+      return;
+    }
+
+    const latDifference = Math.abs(Number(lastPoint[0]) - Number(destLat));
+    const lngDifference = Math.abs(Number(lastPoint[1]) - Number(destLng));
+
+    setRouteReadyForDestination(
+      latDifference <= 0.0005 && lngDifference <= 0.0005
+    );
+  }, [routes, hasSelectedMapDestination, destLat, destLng]);
+
+  // Only show a route after the user has selected a destination on the map.
+  // This prevents the old/default destination route from appearing on first load
+  // and prevents stale route lines from remaining while choosing a new destination.
+  const accessibleRouteCoords = hasSelectedMapDestination &&
+    routeReadyForDestination &&
+    routes?.accessible?.coordinates &&
+    routes.accessible.coordinates.length >= 2
     ? normalizeCoordinatesList(routes.accessible.coordinates)
-    : [
-      [startLat, startLng],
-      [destLat, destLng]
-    ];
+    : [];
 
-  const directRouteCoords = routes?.fastest?.coordinates && routes.fastest.coordinates.length >= 2
+  const directRouteCoords = hasSelectedMapDestination &&
+    routeReadyForDestination &&
+    routes?.fastest?.coordinates &&
+    routes.fastest.coordinates.length >= 2
     ? normalizeCoordinatesList(routes.fastest.coordinates)
-    : [
-      [startLat, startLng],
-      [destLat, destLng]
-    ];
+    : [];
 
-  // Live simulation position
-  const simPositions = accessibleRouteCoords.length > 0 ? accessibleRouteCoords : [[startLat, startLng], [destLat, destLng]];
-  const userLivePos = simPositions[Math.min(currentSimSegment, simPositions.length - 1)];
-
-  // Clean Markers
-  const startIcon = createDivIcon(
-    `<div class="inline-flex items-center gap-1 bg-emerald-600 border-2 border-white text-white px-2.5 py-1 rounded-full shadow-lg font-bold text-xs whitespace-nowrap">
-      <span>📍 Start</span>
+  // Small fixed destination marker. It stays at the selected GPS point.
+  // The live green marker below is the only marker that moves.
+  const destIcon = createDivIcon(
+    `<div style="
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #06b6d4;
+      border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <div style="
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: white;
+      "></div>
     </div>`,
-    [70, 26]
+    [22, 22]
   );
 
-  const destIcon = createDivIcon(
-    `<div class="inline-flex items-center gap-1 bg-cyan-600 border-2 border-white text-white px-2.5 py-1 rounded-full shadow-lg font-bold text-xs whitespace-nowrap">
-      <span>🎯 Destination</span>
+  // Moving current-location marker. This follows userLocation while guidance is active.
+  const userLiveIcon = createDivIcon(
+    `<div style="
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #10b981;
+      border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    ">
+      <div style="
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: white;
+      "></div>
+      <div style="
+        position: absolute;
+        inset: -5px;
+        border-radius: 50%;
+        border: 2px solid rgba(16,185,129,0.35);
+      "></div>
     </div>`,
-    [100, 26]
+    [26, 26]
   );
 
   const obstacleIcon = createDivIcon(
@@ -178,118 +311,98 @@ export default function MapPage() {
     [32, 32]
   );
 
-  const userLiveIcon = createDivIcon(
-    `<div class="relative flex items-center justify-center">
-      <div class="w-8 h-8 rounded-full bg-emerald-500/30 animate-ping absolute"></div>
-      <div class="w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-xl relative z-10"></div>
-    </div>`,
-    [32, 32]
-  );
+  const handleMapDestinationSelect = ({ lat, lng }) => {
+    // Lock the destination while guidance is active.
+    if (isNavSimulating) {
+      triggerHaptic([80, 40]);
+      showVisualToast({
+        title: 'Destination Locked',
+        subtitle: 'Stop guidance before choosing a new destination.',
+        type: 'info'
+      });
+      console.log('[RAASTA] 🔒 Destination change blocked while guidance is active.');
+      return;
+    }
 
-  const handleDestinationChange = (d) => {
-    setDestination(d);
-    setDestPickerOpen(false);
-    triggerHaptic([40]);
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+
+    const selectedDestination = {
+      id: `map-pin-${Date.now()}`,
+      name: 'Selected Location',
+      subtitle: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+      address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+      category: 'Map Pin',
+      coordinates: {
+        lat: latitude,
+        lng: longitude
+      }
+    };
+
+    // Hide the old route immediately while the new destination is being calculated.
+    setRouteReadyForDestination(false);
+    setHasSelectedMapDestination(true);
+
+    setDestination(selectedDestination);
+
+    triggerHaptic([50, 30]);
+
+    showVisualToast({
+      title: 'Destination Selected',
+      subtitle: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+      type: 'success'
+    });
+
+    console.log(
+      '[RAASTA] 📍 Destination pin selected:',
+      latitude,
+      longitude
+    );
+
+    // Calculate from the REAL browser/mobile GPS position whenever it is
+    // available. Do not fall back to the old demo/origin coordinates just
+    // because guidance has not been started yet.
+    const realGpsStart =
+      userLocation?.lat != null && userLocation?.lng != null
+        ? {
+          lat: Number(userLocation.lat),
+          lng: Number(userLocation.lng)
+        }
+        : null;
+
+    console.log(
+      '[RAASTA] 🧭 Route start:',
+      realGpsStart
+        ? `REAL GPS ${realGpsStart.lat}, ${realGpsStart.lng}`
+        : 'No GPS fix yet — using configured origin'
+    );
+
+    requestRouteCalculation(
+      selectedDestination,
+      selectedProfileId,
+      realGpsStart
+    ).catch((err) => {
+      console.error('[RAASTA] Destination route calculation failed:', err);
+    });
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-130px)] min-h-[520px] flex flex-col overflow-hidden bg-slate-950 font-sans">
+    <div className="relative w-full max-w-2xl mx-auto h-[calc(100dvh-6rem)] min-h-0 flex flex-col overflow-hidden bg-slate-950 font-sans px-2 pt-2 pb-24 gap-2">
 
-      {/* 1. Clean App Header with Profile Toggle (Wheelchair / Deaf) */}
-      <header className="p-3 bg-slate-900/95 border-b border-slate-800 z-[1000] flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white text-sm font-black">
-            R
-          </div>
-          <h1 className="text-base font-extrabold text-white tracking-tight">RAASTA</h1>
-        </div>
-
-        {/* Profile Switcher (MVP: Wheelchair / Deaf) */}
-        <div className="flex items-center gap-1.5">
-          <div className="p-0.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-1">
-            <button
-              onClick={() => handleSelectProfile('wheelchair')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${selectedProfileId === 'wheelchair'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-                }`}
-            >
-              <span>♿</span>
-              <span className="hidden sm:inline">Wheelchair</span>
-            </button>
-            <button
-              onClick={() => handleSelectProfile('deaf')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${selectedProfileId === 'deaf'
-                ? 'bg-cyan-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-                }`}
-            >
-              <span>🦻</span>
-              <span className="hidden sm:inline">Deaf</span>
-            </button>
-          </div>
-
-          {/* Quick Report Barrier Button */}
-          <button
-            onClick={() => {
-              setCurrentStep('report');
-              triggerHaptic([50]);
-            }}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 text-xs font-bold flex items-center gap-1 touch-active"
-            title="Report Obstacle"
-          >
-            <Camera className="w-3.5 h-3.5" />
-            <span className="text-[11px]">Report</span>
-          </button>
-        </div>
-      </header>
-
-      {/* 2. Destination Selector Bar */}
-      <div className="p-2.5 bg-slate-900/90 border-b border-slate-800 z-[999] relative flex-shrink-0">
-        <div className="relative">
-          <button
-            onClick={() => setDestPickerOpen(!destPickerOpen)}
-            className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-700 hover:border-slate-600 text-left flex items-center justify-between transition-all"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Search className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-              <div className="truncate">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Destination</div>
-                <div className="text-xs font-bold text-white truncate">{destination.name}</div>
-              </div>
-            </div>
-            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${destPickerOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* Destination Dropdown */}
-          {destPickerOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 p-1.5 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl z-[1001] space-y-1">
-              <div className="text-[10px] uppercase font-bold text-slate-400 px-2 py-1">Select Destination</div>
-              {DEMO_DESTINATIONS.map(d => (
-                <button
-                  key={d.id}
-                  onClick={() => handleDestinationChange(d)}
-                  className={`w-full p-2 rounded-xl text-left flex items-center justify-between text-xs font-medium transition-all ${destination.id === d.id
-                    ? 'bg-emerald-600 text-white font-bold'
-                    : 'hover:bg-slate-800 text-slate-300'
-                    }`}
-                >
-                  <span className="truncate">{d.name}</span>
-                  <span className="text-[10px] opacity-75">{d.category}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
+      {/* Main map — tap anywhere to place a destination waypoint. */}
       {/* 3. Real OpenStreetMap Leaflet Map (Centerpiece) */}
-      <div className="w-full flex-1 relative bg-slate-900 z-0 min-h-[300px]">
+      <div
+        className="w-full flex-1 relative bg-slate-900 z-0 min-h-0 rounded-2xl overflow-hidden border border-slate-800 shadow-lg"
+        style={{ touchAction: 'none' }}
+      >
         <MapContainer
           center={[startLat, startLng]}
           zoom={16}
-          scrollWheelZoom={true}
+          scrollWheelZoom={false}
           zoomControl={true}
+          dragging={true}
+          touchZoom={true}
+          doubleClickZoom={true}
           style={{ width: '100%', height: '100%', minHeight: '300px' }}
           className="w-full h-full"
         >
@@ -300,20 +413,41 @@ export default function MapPage() {
             maxZoom={19}
           />
 
+          <DestinationMapPicker
+            onSelect={handleMapDestinationSelect}
+          />
+
           {/* Map resizer to ensure tiles render immediately */}
           <MapResizer />
 
           {/* Dynamic Auto Bounds to fit start, destination, and calculated routes */}
           <MapBoundsUpdater
             originCoords={{ lat: startLat, lng: startLng }}
-            destCoords={{ lat: destLat, lng: destLng }}
+            destCoords={hasSelectedMapDestination && destLat && destLng
+              ? { lat: destLat, lng: destLng }
+              : null}
             accessibleCoords={accessibleRouteCoords}
             directCoords={directRouteCoords}
-            barrierList={barriers}
+            barrierList={[]}
+          />
+
+          <DestinationBoundsUpdater
+            currentCoords={
+              userLocation?.lat != null && userLocation?.lng != null
+                ? { lat: Number(userLocation.lat), lng: Number(userLocation.lng) }
+                : { lat: startLat, lng: startLng }
+            }
+            destCoords={
+              hasSelectedMapDestination && destLat != null && destLng != null
+                ? { lat: destLat, lng: destLng }
+                : null
+            }
+            accessibleCoords={accessibleRouteCoords}
+            destinationKey={destination?.id}
           />
 
           {/* Blocked Direct Route (Red dashed when rerouted) */}
-          {routes?.fastest?.isBlocked && (
+          {routeReadyForDestination && routes?.fastest?.isBlocked && (
             <Polyline
               positions={directRouteCoords}
               pathOptions={{
@@ -326,34 +460,47 @@ export default function MapPage() {
           )}
 
           {/* Accessible Step-Free Route (Green) */}
-          <Polyline
-            positions={accessibleRouteCoords}
-            pathOptions={{
-              color: '#10b981',
-              weight: 6,
-              opacity: 0.95
-            }}
-          />
+          {routeReadyForDestination && accessibleRouteCoords.length >= 2 && (
+            <Polyline
+              positions={accessibleRouteCoords}
+              pathOptions={{
+                color: '#10b981',
+                weight: 6,
+                opacity: 0.95
+              }}
+            />
+          )}
 
-          {/* Origin Marker */}
-          <Marker position={[startLat, startLng]} icon={startIcon}>
-            <Popup>
-              <div className="text-xs font-bold text-slate-900">
-                <div>📍 Start: {origin.name}</div>
-                <div className="text-[10px] text-slate-600 font-normal">Step-free departure point</div>
-              </div>
-            </Popup>
-          </Marker>
+          {/* Live Current Location Marker */}
+          {isNavSimulating && userLocation?.lat != null && userLocation?.lng != null && (
+            <Marker
+              position={[Number(userLocation.lat), Number(userLocation.lng)]}
+              icon={userLiveIcon}
+            >
+              <Popup>
+                <div className="text-xs font-bold text-slate-900">
+                  <div>📍 Your Current Location</div>
+                  {gpsAccuracy != null && (
+                    <div className="text-[10px] text-slate-600 font-normal">
+                      Accuracy: ±{Math.round(Number(gpsAccuracy))} m
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
           {/* Destination Marker */}
-          <Marker position={[destLat, destLng]} icon={destIcon}>
-            <Popup>
-              <div className="text-xs font-bold text-slate-900">
-                <div>🎯 {destination.name}</div>
-                <div className="text-[10px] text-slate-600 font-normal">{destination.address}</div>
-              </div>
-            </Popup>
-          </Marker>
+          {hasSelectedMapDestination && destLat != null && destLng != null && (
+            <Marker position={[destLat, destLng]} icon={destIcon}>
+              <Popup>
+                <div className="text-xs font-bold text-slate-900">
+                  <div>🎯 {destination.name}</div>
+                  <div className="text-[10px] text-slate-600 font-normal">{destination.address}</div>
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
           {/* Real Blockage Markers from Backend */}
           {barriers.map((b, idx) => {
@@ -379,17 +526,7 @@ export default function MapPage() {
             );
           })}
 
-          {/* Live Walking Simulation Marker */}
-          {isNavSimulating && (
-            <Marker position={userLivePos} icon={userLiveIcon}>
-              <Popup>
-                <div className="text-xs font-bold text-slate-900">Your Current Position</div>
-              </Popup>
-            </Marker>
-          )}
-
         </MapContainer>
-
         {/* Loading Overlay */}
         {isCalculatingRoute && (
           <div className="absolute top-3 left-3 right-3 z-[1000] p-3 rounded-xl bg-slate-900/95 border border-emerald-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
@@ -400,7 +537,7 @@ export default function MapPage() {
       </div>
 
       {/* 4. Bottom Route & Accessibility Status Panel */}
-      <div className="p-3.5 bg-slate-900 border-t border-slate-800 space-y-2.5 z-[1000]">
+      <div className="w-full flex-shrink-0 p-3 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-lg space-y-3 z-[1000]">
 
         {/* Backend Alert / Reroute Notification */}
         {routes?.accessible?.rerouted && (
@@ -426,19 +563,24 @@ export default function MapPage() {
         )}
 
         {/* Route Stats & Action Buttons */}
-        <div className="flex items-center justify-between gap-2">
-          <div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
               <span>♿</span>
               <span>{routes?.accessible?.rerouted ? 'Alternative Route' : 'Accessible Route'}</span>
             </div>
             <div className="text-sm font-extrabold text-white">
-              {routes?.accessible?.distanceMeters ? `${routes.accessible.distanceMeters} m` : 'Calculating...'}
-              {routes?.accessible?.durationMinutes ? ` • ${routes.accessible.durationMinutes} min` : ''}
+              {!hasSelectedMapDestination
+                ? 'Select a destination'
+                : isCalculatingRoute
+                  ? 'Calculating...'
+                  : routes?.accessible?.distanceMeters != null
+                    ? `${routes.accessible.distanceMeters} m${routes?.accessible?.durationMinutes ? ` • ${routes.accessible.durationMinutes} min` : ''}`
+                    : 'Route unavailable'}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex-shrink-0 flex items-center justify-center">
             {/* Start Walk Simulation */}
             <button
               onClick={() => {
@@ -448,7 +590,7 @@ export default function MapPage() {
                   startGpsGuidance();
                 }
               }}
-              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 touch-active transition-all ${isNavSimulating
+              className={`py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 touch-active transition-all min-w-[138px] ${isNavSimulating
                 ? 'bg-rose-600 hover:bg-rose-500 text-white'
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
                 }`}

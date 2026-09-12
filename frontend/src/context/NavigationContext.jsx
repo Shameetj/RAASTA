@@ -66,10 +66,91 @@ export function NavigationProvider({ children }) {
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [locationError, setLocationError] = useState(null);
 
+  // Get one real GPS fix as soon as the app loads.
+  // This updates the app's origin/current location without starting guidance
+  // or calculating a route automatically.
+  useEffect(() => {
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.geolocation
+    ) {
+      return;
+    }
+
+    console.log('[RAASTA] Requesting current GPS location on app load...');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const {
+          latitude,
+          longitude,
+          accuracy,
+          heading,
+          speed
+        } = position.coords;
+
+        const livePosition = {
+          lat: latitude,
+          lng: longitude,
+          accuracy: accuracy ?? null,
+          heading: heading ?? null,
+          speed: speed ?? null,
+          timestamp: position.timestamp
+        };
+
+        console.log(
+          '[RAASTA] 📍 Initial real GPS location:',
+          livePosition
+        );
+
+        // Make the real phone GPS the app origin.
+        setUserLocation(livePosition);
+        setGpsAccuracy(accuracy ?? null);
+        setOrigin((previousOrigin) => ({
+          ...previousOrigin,
+          name: 'Current Location',
+          coordinates: {
+            ...(previousOrigin?.coordinates || {}),
+            lat: latitude,
+            lng: longitude
+          }
+        }));
+        setLocationError(null);
+      },
+      (error) => {
+        console.warn(
+          '[RAASTA] Initial GPS location unavailable:',
+          error
+        );
+
+        if (error.code === 1) {
+          setLocationError(
+            'Location permission denied. Allow location access to use your current GPS location.'
+          );
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      }
+    );
+  }, []);
+
   const watchIdRef = useRef(null);
   const gpsActiveRef = useRef(false);
   const gpsRetryTimerRef = useRef(null);
   const reroutedBlockageRef = useRef(null);
+
+  // Guidance session control: don't treat a blockage already beside the
+  // user at the moment Start is pressed as a newly reached blockage.
+  const guidanceStartLocationRef = useRef(null);
+  const guidanceMovedAwayRef = useRef(false);
+
+  // GPS movement / rerouting control.
+  // Works with both real mobile GPS and browser GPS simulation.
+  const lastRouteCalculationLocationRef = useRef(null);
+  const routeCalculationInProgressRef = useRef(false);
 
   const [deafAlerts, setDeafAlerts] = useState(DEAF_MODE_ALERTS);
   const [activeToast, setActiveToast] = useState(null);
@@ -276,11 +357,6 @@ export function NavigationProvider({ children }) {
         console.warn('[RAASTA] Blockages fetch warning:', err);
       }
 
-      try {
-        await requestRouteCalculation(destination, selectedProfileId);
-      } catch (err) {
-        console.warn('[RAASTA] Initial route calculation warning:', err);
-      }
     }
     initData();
   }, []);
@@ -314,8 +390,21 @@ export function NavigationProvider({ children }) {
   // Add barrier report to Dev1 and recalculate route dynamically
   const addBarrierReport = async (newBarrier) => {
     // 1. Convert coordinates: coordinates.lat -> latitude, coordinates.lng -> longitude
-    const lat = Number(newBarrier.latitude ?? newBarrier.coordinates?.lat ?? newBarrier.lat ?? 15.4900);
-    const lng = Number(newBarrier.longitude ?? newBarrier.coordinates?.lng ?? newBarrier.lng ?? 73.8270);
+    // A report made during/after real GPS guidance must use the phone's
+    // latest GPS position instead of the selected sample/preset location.
+    const gpsReportLat = isNavSimulating ? userLocation?.lat : null;
+    const gpsReportLng = isNavSimulating ? userLocation?.lng : null;
+
+    const lat = Number(
+      gpsReportLat != null
+        ? gpsReportLat
+        : (newBarrier.latitude ?? newBarrier.coordinates?.lat ?? newBarrier.lat ?? 15.4900)
+    );
+    const lng = Number(
+      gpsReportLng != null
+        ? gpsReportLng
+        : (newBarrier.longitude ?? newBarrier.coordinates?.lng ?? newBarrier.lng ?? 73.8270)
+    );
     const rawType = (newBarrier.type || newBarrier.category || 'stairs').toLowerCase();
     const typeLabel = newBarrier.typeLabel || (rawType === 'stairs' ? 'Pedestrian Stairs' : rawType === 'broken_ramp' ? 'Damaged Ramp' : 'Hazard Obstacle');
     const severity = (newBarrier.severity || 'high').toLowerCase();
@@ -372,17 +461,33 @@ export function NavigationProvider({ children }) {
 
     setBarriers(prev => [officialBarrier, ...prev.filter(b => b.id !== officialBarrier.id)]);
 
-    // Step 3: Recalculate route via POST /api/routes/calculate
-    // Flow: User reports blockage -> POST /api/blockages -> Dev1 saves it -> POST /api/routes/calculate -> Backend sees new blockage -> Alternative route -> Map updates
-    try {
-      await requestRouteCalculation(destination, selectedProfileId);
-    } catch (routeErr) {
-      console.error('[RAASTA] Recalculating route after blockage report failed:', routeErr);
+    // Step 3:
+    // Save the report immediately. If the report was made at the user's
+    // current GPS position, do NOT immediately reroute around a blockage
+    // that the user is already standing on. The backend will use this
+    // blockage for future route calculations, and normal GPS blockage
+    // detection will reroute when the user encounters a blockage ahead.
+    const reportIsAtCurrentGps =
+      isNavSimulating &&
+      userLocation?.lat != null &&
+      userLocation?.lng != null;
+
+    if (!reportIsAtCurrentGps) {
+      try {
+        await requestRouteCalculation(
+          destination,
+          selectedProfileId
+        );
+      } catch (routeErr) {
+        console.error('[RAASTA] Recalculating route after blockage report failed:', routeErr);
+      }
     }
 
     showVisualToast({
-      title: 'Blockage Reported & Route Recalculated!',
-      subtitle: `Registered in Dev1. Alternative route displayed.`,
+      title: 'Blockage Reported',
+      subtitle: reportIsAtCurrentGps
+        ? 'Saved at your current GPS location.'
+        : 'Registered in Dev1 and route updated.',
       type: 'success'
     });
 
@@ -411,19 +516,65 @@ export function NavigationProvider({ children }) {
       timestamp: position.timestamp
     };
 
-    console.log('[RAASTA] GPS position:', livePosition);
+    console.log('[RAASTA] 📍 Real GPS position:', livePosition);
 
     setUserLocation(livePosition);
     setGpsAccuracy(accuracy ?? null);
     setLocationError(null);
 
     // -------------------------------------------------------
+    // GUIDANCE START POSITION / BLOCKAGE GATING
+    // -------------------------------------------------------
+    const distanceFromGuidanceStart = (lat1, lng1, lat2, lng2) => {
+      const R = 6371000;
+      const toRad = (value) => (value * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    if (!guidanceStartLocationRef.current) {
+      guidanceStartLocationRef.current = {
+        lat: latitude,
+        lng: longitude
+      };
+      guidanceMovedAwayRef.current = false;
+      console.log('[RAASTA] 🧭 Guidance baseline set:', latitude, longitude);
+    } else if (!guidanceMovedAwayRef.current) {
+      const movedFromStart = distanceFromGuidanceStart(
+        guidanceStartLocationRef.current.lat,
+        guidanceStartLocationRef.current.lng,
+        latitude,
+        longitude
+      );
+
+      if (movedFromStart >= 25) {
+        guidanceMovedAwayRef.current = true;
+        console.log(
+          `[RAASTA] 🧭 User moved ${Math.round(movedFromStart)}m from guidance start — blockage detection enabled.`
+        );
+      }
+    }
+
+    // -------------------------------------------------------
+    // MOBILE GPS POSITION
+    // -------------------------------------------------------
+    // Keep the live GPS marker updated while guidance is active.
+    // Do NOT recalculate the route merely because the user moved 50m.
+    // RAASTA reroutes only when a relevant blockage is detected.
+    // -------------------------------------------------------
     // WHEELCHAIR BLOCKAGE DETECTION
     // -------------------------------------------------------
 
     if (
       selectedProfileId === 'wheelchair' &&
-      barriers.length > 0
+      barriers.length > 0 &&
+      guidanceMovedAwayRef.current
     ) {
       const distanceInMeters = (
         lat1,
@@ -543,13 +694,19 @@ export function NavigationProvider({ children }) {
     }
 
     console.log(
-      '[RAASTA] Starting GPS guidance...'
+      '[RAASTA] Starting GPS guidance with real browser/mobile GPS...'
     );
 
     gpsActiveRef.current = true;
 
     // Allow a new blockage detection session.
     reroutedBlockageRef.current = null;
+
+    // A new guidance session starts a fresh movement baseline.
+    lastRouteCalculationLocationRef.current = null;
+    routeCalculationInProgressRef.current = false;
+    guidanceStartLocationRef.current = null;
+    guidanceMovedAwayRef.current = false;
 
     setLocationError(null);
     setIsNavSimulating(true);
@@ -589,10 +746,16 @@ export function NavigationProvider({ children }) {
               return;
             }
 
-            // Permission denied
+            // Permission denied.
+            // Do NOT fall back to an automatically moving demo location.
+            // Real browser/mobile GPS is the source of truth.
             if (error.code === 1) {
+              console.warn(
+                '[RAASTA] GPS permission denied. Real GPS is required.'
+              );
+
               setLocationError(
-                'Location permission was denied. Please allow location access in your browser.'
+                'Location permission denied. Please allow location access for RAASTA.'
               );
               return;
             }
@@ -656,6 +819,13 @@ export function NavigationProvider({ children }) {
     }
 
     setIsNavSimulating(false);
+
+    // Reset movement tracking so the next guidance session starts
+    // from its first real GPS fix.
+    lastRouteCalculationLocationRef.current = null;
+    routeCalculationInProgressRef.current = false;
+    guidanceStartLocationRef.current = null;
+    guidanceMovedAwayRef.current = false;
 
     console.log(
       '[RAASTA] GPS guidance stopped.'

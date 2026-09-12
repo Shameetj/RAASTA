@@ -13,12 +13,17 @@ import BarrierReportPage from './pages/BarrierReportPage';
 
 export default function App() {
   const { currentStep } = useNavigation();
+  const isMapScreen = currentStep === 'map';
 
   return (
     <MobileAppLayout>
-      
-      {/* Scrollable Active Screen Content */}
-      <div className="flex-1 w-full overflow-y-auto pb-20 relative">
+      <div
+        className={
+          isMapScreen
+            ? 'flex-1 w-full min-h-0 overflow-hidden relative'
+            : 'flex-1 w-full overflow-y-auto pb-20 relative'
+        }
+      >
         {currentStep === 'home' && <HomePage />}
         {currentStep === 'profile' && <ProfileSelectionPage />}
         {currentStep === 'destination' && <DestinationPage />}
@@ -27,17 +32,12 @@ export default function App() {
         {currentStep === 'report' && <BarrierReportPage />}
       </div>
 
-      {/* Visual & Haptic Alert Overlays for Deaf / Universal */}
       <VisualAlertBanner />
-
-      {/* Civic Infrastructure Telemetry Modal */}
       <CivicDashboardModal />
 
-      {/* Fixed Bottom Native Tab Bar Navigation */}
       <div className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto z-30">
         <BottomTabBar />
       </div>
-
     </MobileAppLayout>
   );
 }
