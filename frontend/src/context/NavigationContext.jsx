@@ -48,23 +48,40 @@ export function NavigationProvider({ children }) {
         const blocks = await fetchBlockages();
         if (blocks && Array.isArray(blocks) && blocks.length > 0) {
           console.log('[RAASTA] Received real blockages from backend:', blocks);
-          // Normalize backend fields
-          const normalized = blocks.map((b, idx) => ({
-            id: b.id || `barr-${idx}`,
-            title: b.title || 'Reported Obstacle',
-            type: b.type || 'stairs',
-            typeLabel: b.type === 'stairs' ? 'Pedestrian Stairs' : b.type === 'broken_ramp' ? 'Damaged Ramp' : 'Blocked Sidewalk',
-            severity: b.severity || 'high',
-            locationName: b.location_name || b.locationName || 'Demo Corridor',
-            coordinates: b.coordinates || { lat: b.latitude || 28.6335, lng: b.longitude || 77.2190 },
-            reportedAt: b.reported_at || b.reportedAt || 'Verified',
-            verificationStatus: 'Verified by Backend',
-            decayStatus: 'Active',
-            description: b.description || 'Obstacle loaded from backend database.',
-            isOnRouteA: true,
-            isOnRouteB: false
-          }));
-          setBarriers(normalized);
+          // Normalize backend fields for each blockage
+          const normalized = blocks.map((b, idx) => {
+            const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
+            const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
+            const rawType = (b.type || 'stairs').toLowerCase();
+            const typeLabel = rawType === 'stairs' ? 'Stairs' : 
+                              rawType === 'broken_ramp' ? 'Broken Ramp' : 
+                              rawType === 'construction' ? 'Construction' :
+                              (rawType.charAt(0).toUpperCase() + rawType.slice(1));
+            const severity = (b.severity || 'high').toLowerCase();
+            const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
+            const description = b.description || (rawType === 'stairs' ? 'Stairs blocking sidewalk' : `${typeLabel} blocking sidewalk`);
+
+            return {
+              id: b.id || `barr-${idx}-${lat}-${lng}`,
+              title: b.title || typeLabel,
+              type: rawType,
+              typeLabel: typeLabel,
+              severity: severity,
+              severityLabel: severityLabel,
+              locationName: b.location_name || b.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+              coordinates: { lat, lng },
+              reportedAt: b.reported_at || b.reportedAt || 'Verified by Backend',
+              verificationStatus: 'Verified by Backend',
+              decayStatus: 'Active',
+              description: description,
+              isOnRouteA: true,
+              isOnRouteB: false
+            };
+          }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
+
+          if (normalized.length > 0) {
+            setBarriers(normalized);
+          }
           setApiError(null);
         }
       } catch (err) {

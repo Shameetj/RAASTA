@@ -56,8 +56,10 @@ function MapBoundsUpdater({ originCoords, destCoords, accessibleCoords, directCo
 
     if (barrierList && barrierList.length > 0) {
       barrierList.forEach(b => {
-        if (b.coordinates?.lat && b.coordinates?.lng) {
-          points.push([b.coordinates.lat, b.coordinates.lng]);
+        const bLat = Number(b.coordinates?.lat ?? b.latitude);
+        const bLng = Number(b.coordinates?.lng ?? b.longitude);
+        if (!isNaN(bLat) && !isNaN(bLng)) {
+          points.push([bLat, bLng]);
         }
       });
     }
@@ -434,17 +436,44 @@ export default function MapPage() {
           )}
 
           {/* Physical Barriers / Obstacles Pins */}
-          {showObstacles && barriers.map((barr) => {
-            const bLat = barr.coordinates?.lat || 28.6335;
-            const bLng = barr.coordinates?.lng || 77.2190;
+          {showObstacles && barriers.map((barr, idx) => {
+            const bLat = Number(barr.coordinates?.lat ?? barr.latitude);
+            const bLng = Number(barr.coordinates?.lng ?? barr.longitude);
+            if (isNaN(bLat) || isNaN(bLng)) return null;
+
+            const typeDisplay = barr.typeLabel || (barr.type ? (barr.type.charAt(0).toUpperCase() + barr.type.slice(1)) : 'Stairs');
+            const descDisplay = barr.description || (barr.type === 'stairs' ? 'Stairs blocking sidewalk' : `${typeDisplay} blocking sidewalk`);
+            const severityDisplay = barr.severityLabel || (barr.severity ? (barr.severity.charAt(0).toUpperCase() + barr.severity.slice(1)) : 'High');
+
             return (
-              <Marker key={barr.id} position={[bLat, bLng]} icon={obstacleIcon}>
+              <Marker 
+                key={barr.id || `barr-${idx}-${bLat}-${bLng}`} 
+                position={[bLat, bLng]} 
+                icon={obstacleIcon}
+              >
                 <Popup>
-                  <div className="space-y-1 max-w-[200px]">
-                    <div className="text-[10px] font-bold uppercase text-rose-400">⚠️ Reported Barrier</div>
-                    <div className="text-xs font-bold text-white">{barr.title}</div>
-                    <p className="text-[10px] text-slate-300">{barr.description}</p>
-                    <div className="text-[9px] text-rose-300 font-semibold">{barr.severityLabel || 'Blocked for Wheelchairs'}</div>
+                  <div className="space-y-1.5 p-1 min-w-[170px] text-left">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                      <span>⚠️</span>
+                      <span className="text-white text-xs font-bold">{typeDisplay}</span>
+                    </div>
+
+                    <div className="text-[11px] text-slate-200 font-medium leading-snug">
+                      {descDisplay}
+                    </div>
+
+                    <div className="pt-1.5 border-t border-slate-700/80 text-[10px] flex items-center justify-between font-semibold">
+                      <span className="text-slate-400">Severity:</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        barr.severity === 'critical' || barr.severity === 'high'
+                          ? 'bg-rose-950 text-rose-300 border border-rose-700/80'
+                          : barr.severity === 'medium'
+                          ? 'bg-amber-950 text-amber-300 border border-amber-700/80'
+                          : 'bg-slate-800 text-slate-300 border border-slate-700'
+                      }`}>
+                        {severityDisplay}
+                      </span>
+                    </div>
                   </div>
                 </Popup>
               </Marker>
