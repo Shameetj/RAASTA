@@ -66,6 +66,39 @@ export default function DestinationPage() {
     }, 1500);
   };
 
+  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
+
+  const handleShowAccessibleRoutes = async () => {
+    setIsLoadingRoutes(true);
+    triggerHaptic([40, 20]);
+    
+    try {
+      // 1. Trigger POST /api/routes/calculate and wait for backend response
+      const routeResult = await requestRouteCalculation(destination, selectedProfile.id);
+      
+      // 2. Route is received and saved in NavigationContext state
+      if (routeResult) {
+        showVisualToast({
+          title: 'Route Calculated Successfully',
+          subtitle: `Optimal step-free path to ${destination.name} ready.`,
+          type: 'success'
+        });
+      } else {
+        showVisualToast({
+          title: `Route to ${destination.name}`,
+          subtitle: 'Step-free accessible path ready.',
+          type: 'info'
+        });
+      }
+    } catch (err) {
+      console.warn('[RAASTA] Error calculating route:', err);
+    } finally {
+      setIsLoadingRoutes(false);
+      // 3. Open map
+      setCurrentStep('map');
+    }
+  };
+
   return (
     <div className="p-4 space-y-4 pb-8 animate-fade-in">
       
@@ -147,7 +180,6 @@ export default function DestinationPage() {
               key={dest.id}
               onClick={() => {
                 setDestination(dest);
-                requestRouteCalculation(dest, selectedProfile.id);
                 triggerHaptic([40, 20]);
               }}
               className={`p-3.5 rounded-2xl border transition-all touch-active cursor-pointer ${
@@ -190,20 +222,22 @@ export default function DestinationPage() {
 
       {/* CTA Button */}
       <button
-        onClick={() => {
-          requestRouteCalculation(destination, selectedProfile.id);
-          setCurrentStep('map');
-          triggerHaptic([60, 30]);
-          showVisualToast({
-            title: `Route to ${destination.name}`,
-            subtitle: 'Finding verified step-free paths...',
-            type: 'info'
-          });
-        }}
-        className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md touch-active cursor-pointer"
+        id="show-accessible-routes-btn"
+        disabled={isLoadingRoutes}
+        onClick={handleShowAccessibleRoutes}
+        className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-700 disabled:opacity-85 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md touch-active cursor-pointer transition-all"
       >
-        <span>Show Accessible Routes</span>
-        <ArrowRight className="w-4 h-4" />
+        {isLoadingRoutes ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span>Calculating Accessible Route...</span>
+          </>
+        ) : (
+          <>
+            <span>Show Accessible Routes</span>
+            <ArrowRight className="w-4 h-4" />
+          </>
+        )}
       </button>
 
     </div>

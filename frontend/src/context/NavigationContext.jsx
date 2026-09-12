@@ -65,8 +65,11 @@ export function NavigationProvider({ children }) {
     loadBackendData();
   }, []);
 
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+
   // Calculate route using Dev2 endpoint when destination/profile changes
   const requestRouteCalculation = async (targetDest = destination, profileId = selectedProfileId) => {
+    setIsCalculatingRoute(true);
     try {
       const result = await calculateRoute({
         start: { lat: origin.coordinates.lat, lng: origin.coordinates.lng, name: origin.name },
@@ -81,30 +84,48 @@ export function NavigationProvider({ children }) {
           setRoutes(prev => ({
             fastest: {
               ...prev.fastest,
-              durationMinutes: result.direct_route?.duration_minutes || prev.fastest.durationMinutes,
-              distanceMeters: result.direct_route?.distance_meters || prev.fastest.distanceMeters,
-              accessibilityScore: result.direct_route?.accessibility_score || 32,
-              barriers: result.direct_route?.blockages_found?.map(name => ({ name, type: 'stairs', severity: 'Critical' })) || prev.fastest.barriers
+              durationMinutes: result.direct_route?.duration_minutes ?? prev.fastest.durationMinutes,
+              distanceMeters: result.direct_route?.distance_meters ?? prev.fastest.distanceMeters,
+              accessibilityScore: result.direct_route?.accessibility_score ?? (result.direct_route?.is_blocked ? 32 : 80),
+              barriers: result.direct_route?.blockages_found?.map(name => ({ name, type: 'stairs', severity: 'Critical' })) || prev.fastest.barriers,
+              coordinates: result.direct_route?.coordinates || prev.fastest.coordinates
             },
             accessible: {
               ...prev.accessible,
-              durationMinutes: result.alternative_route?.duration_minutes || prev.accessible.durationMinutes,
-              distanceMeters: result.alternative_route?.distance_meters || prev.accessible.distanceMeters,
-              accessibilityScore: result.accessibility_score?.score || 94,
-              scoreRating: result.accessibility_score?.grade || 'Safe & Accessible',
+              durationMinutes: result.alternative_route?.duration_minutes ?? prev.accessible.durationMinutes,
+              distanceMeters: result.alternative_route?.distance_meters ?? prev.accessible.distanceMeters,
+              accessibilityScore: result.accessibility_score?.score ?? result.alternative_route?.accessibility_score ?? 94,
+              scoreRating: result.accessibility_score?.grade ?? 'Safe & Wheelchair Accessible',
               segments: result.turn_by_turn?.map(t => ({
                 text: t.instruction || t.text,
                 distance: t.distance || '100m',
-                safe: t.safe !== false,
+                safe: !t.is_hazard && t.safe !== false,
                 highlight: t.highlight || t.visual_cue || 'Step-free'
-              })) || prev.accessible.segments
+              })) || prev.accessible.segments,
+              coordinates: result.alternative_route?.coordinates || prev.accessible.coordinates
             }
           }));
         }
+
+        if (result.visual_alerts && Array.isArray(result.visual_alerts) && result.visual_alerts.length > 0) {
+          setDeafAlerts(result.visual_alerts.map((a, i) => ({
+            id: `alert-backend-${i}`,
+            title: a.title || 'Navigation Alert',
+            subtitle: a.message || a.subtitle || '',
+            type: a.level === 'warning' || a.level === 'danger' ? 'hazard' : 'nav_cue',
+            severity: a.level || 'info',
+            timestamp: 'Real-time'
+          })));
+        }
+
+        return result;
       }
     } catch (e) {
       console.warn('[RAASTA] Route calculation using verified fallback:', e);
+    } finally {
+      setIsCalculatingRoute(false);
     }
+    return null;
   };
 
   const handleSelectProfile = (profileId) => {
@@ -243,7 +264,8 @@ export function NavigationProvider({ children }) {
     addBarrierReport,
     civicModalOpen,
     setCivicModalOpen,
-    requestRouteCalculation
+    requestRouteCalculation,
+    isCalculatingRoute
   };
 
   return (
