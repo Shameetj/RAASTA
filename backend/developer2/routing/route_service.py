@@ -6,12 +6,19 @@ developer2_path = Path(__file__).resolve().parent.parent
 
 sys.path.append(str(developer2_path / "pathfinding"))
 sys.path.append(str(developer2_path / "accessibility"))
+sys.path.append(str(developer2_path / "routing"))
 
 from dijkstra import dijkstra
 from collision import detect_route_blockages
 from detour import find_alternative_route
 from alerts import create_blockage_alert
-from blockage_client import get_blockages_for_route
+from blockage_client import (
+    get_blockages_for_route,
+    get_active_blockages,
+)
+
+from accessible_route import calculate_accessible_route
+from routing_provider import OSRMError
 
 
 def get_route_coordinates(graph, path):
@@ -122,3 +129,97 @@ def calculate_route(
         "alerts": alerts,
         "blockages": detected_blockages,
     }
+
+
+def calculate_route_from_coordinates(
+    start_latitude: float,
+    start_longitude: float,
+    destination_latitude: float,
+    destination_longitude: float,
+    active_blockages: list[dict] | None = None,
+    profile: str = "wheelchair",
+) -> dict:
+    """
+    Public Dev1 -> Dev2 routing interface.
+
+    Uses real latitude/longitude coordinates and OSRM.
+
+    Wheelchair:
+        Detect physical accessibility blockages and reroute
+        using clear OSRM alternatives.
+
+    Deaf:
+        Use the normal walking route without wheelchair-specific
+        physical blockage rerouting.
+    """
+
+    # Validate profile
+    if profile not in {"wheelchair", "deaf"}:
+        return {
+            "success": False,
+            "message": (
+                "Invalid profile. Expected 'wheelchair' or 'deaf'."
+            ),
+            "profile": profile,
+            "route": None,
+            "alerts": [],
+            "blockages": [],
+            "rerouted": False,
+        }
+
+    # If Dev1 did not provide blockages, fetch active blockages.
+    if active_blockages is None:
+        try:
+            active_blockages = get_active_blockages()
+        except Exception as exc:
+            return {
+                "success": False,
+                "message": (
+                    f"Failed to retrieve active blockages: {exc}"
+                ),
+                "profile": profile,
+                "route": None,
+                "alerts": [],
+                "blockages": [],
+                "rerouted": False,
+            }
+
+    try:
+        result = calculate_accessible_route(
+            start_latitude=start_latitude,
+            start_longitude=start_longitude,
+            destination_latitude=destination_latitude,
+            destination_longitude=destination_longitude,
+            active_blockages=active_blockages,
+            profile=profile,
+        )
+
+    except OSRMError as exc:
+        return {
+            "success": False,
+            "message": str(exc),
+            "profile": profile,
+            "route": None,
+            "alerts": [],
+            "blockages": [],
+            "rerouted": False,
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "message": f"Routing request failed: {exc}",
+            "profile": profile,
+            "route": None,
+            "alerts": [],
+            "blockages": [],
+            "rerouted": False,
+        }
+
+    # Ensure the public response always contains these fields.
+    result["profile"] = profile
+    result.setdefault("alerts", [])
+    result.setdefault("blockages", [])
+    result.setdefault("rerouted", False)
+
+    return result
