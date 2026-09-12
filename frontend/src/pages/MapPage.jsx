@@ -1,5 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigation } from '../context/NavigationContext';
+import { 
+  MapContainer, 
+  TileLayer, 
+  Marker, 
+  Popup, 
+  Polyline, 
+  useMap 
+} from 'react-leaflet';
+import L from 'leaflet';
 import { 
   Play, 
   Square, 
@@ -9,8 +18,52 @@ import {
   Navigation,
   CheckCircle2,
   AlertTriangle,
-  X
+  Layers,
+  Eye,
+  EyeOff
 } from 'lucide-react';
+
+// Component to dynamically fit map bounds to route & markers
+function MapBoundsUpdater({ originCoords, destCoords, barrierList }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!originCoords || !destCoords) return;
+
+    const points = [
+      [originCoords.lat, originCoords.lng],
+      [destCoords.lat, destCoords.lng]
+    ];
+
+    if (barrierList && barrierList.length > 0) {
+      barrierList.forEach(b => {
+        if (b.coordinates?.lat && b.coordinates?.lng) {
+          points.push([b.coordinates.lat, b.coordinates.lng]);
+        }
+      });
+    }
+
+    try {
+      const bounds = L.latLngBounds(points);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17, animate: true });
+    } catch (e) {
+      console.warn('[Map] Fit bounds warning:', e);
+    }
+  }, [originCoords, destCoords, barrierList, map]);
+
+  return null;
+}
+
+// Custom Leaflet DivIcon helpers
+const createDivIcon = (htmlContent, size = [36, 36]) => {
+  return L.divIcon({
+    html: htmlContent,
+    className: 'custom-div-icon',
+    iconSize: size,
+    iconAnchor: [size[0] / 2, size[1] / 2],
+    popupAnchor: [0, -size[1] / 2]
+  });
+};
 
 export default function MapPage() {
   const {
@@ -32,18 +85,88 @@ export default function MapPage() {
   const [activeRouteView, setActiveRouteView] = useState('accessible'); // 'accessible' | 'fastest' | 'both'
   const [showObstacles, setShowObstacles] = useState(true);
   const [showFeatures, setShowFeatures] = useState(true);
-  const [activePin, setActivePin] = useState(null);
+
+  const startLat = origin.coordinates?.lat || 28.6315;
+  const startLng = origin.coordinates?.lng || 77.2167;
+  const destLat = destination.coordinates?.lat || 28.6358;
+  const destLng = destination.coordinates?.lng || 77.2215;
+
+  // Real geographic paths
+  const directRouteCoords = [
+    [startLat, startLng],
+    [28.6335, 77.2190], // Coordinates of the 18 steps hazard
+    [destLat, destLng]
+  ];
+
+  const accessibleRouteCoords = [
+    [startLat, startLng],
+    [startLat + 0.0007, startLng + 0.0005], // Ramp at Gate 1
+    [28.6338, 77.2180], // West Promenade
+    [28.6345, 77.2195], // Wide Tactile Path
+    [destLat, destLng]
+  ];
+
+  // Simulated GPS position
+  const simPositions = [
+    [startLat, startLng],
+    [startLat + 0.0007, startLng + 0.0005],
+    [28.6338, 77.2180],
+    [28.6345, 77.2195],
+    [destLat, destLng]
+  ];
+  const userLivePos = simPositions[Math.min(currentSimSegment, simPositions.length - 1)];
+
+  // Icons
+  const startIcon = createDivIcon(
+    `<div class="w-8 h-8 rounded-full bg-emerald-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold ring-4 ring-emerald-500/30 animate-pulse">
+      🚇
+    </div>`
+  );
+
+  const destIcon = createDivIcon(
+    `<div class="w-8 h-8 rounded-full bg-cyan-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold ring-4 ring-cyan-500/30">
+      🏛️
+    </div>`
+  );
+
+  const obstacleIcon = createDivIcon(
+    `<div class="w-8 h-8 rounded-full bg-rose-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold ring-4 ring-rose-500/30">
+      ⚠️
+    </div>`
+  );
+
+  const rampIcon = createDivIcon(
+    `<div class="w-7 h-7 rounded-full bg-emerald-700 border-2 border-emerald-300 shadow-md flex items-center justify-center text-white text-xs">
+      ♿
+    </div>`,
+    [28, 28]
+  );
+
+  const sidewalkIcon = createDivIcon(
+    `<div class="w-7 h-7 rounded-full bg-cyan-700 border-2 border-cyan-300 shadow-md flex items-center justify-center text-white text-xs">
+      🚶
+    </div>`,
+    [28, 28]
+  );
+
+  const userLiveIcon = createDivIcon(
+    `<div class="relative flex items-center justify-center">
+      <div class="w-10 h-10 rounded-full bg-emerald-500/30 animate-ping absolute"></div>
+      <div class="w-5 h-5 rounded-full bg-emerald-500 border-2 border-white shadow-xl relative z-10"></div>
+    </div>`,
+    [40, 40]
+  );
 
   return (
     <div className="relative w-full h-full flex flex-col flex-1 overflow-hidden animate-fade-in">
       
       {/* Top Floating Transit Card */}
-      <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-        <div className="px-3.5 py-2 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border border-slate-800 shadow-md pointer-events-auto flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+      <div className="absolute top-3 left-3 right-3 z-[1000] flex items-center justify-between pointer-events-none">
+        <div className="px-3.5 py-2 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border border-slate-800 shadow-xl pointer-events-auto flex items-center gap-2.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Directions</div>
-            <div className="text-xs font-bold text-white truncate max-w-[160px]">
+            <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Directions to</div>
+            <div className="text-xs font-bold text-white truncate max-w-[150px]">
               {destination.name}
             </div>
           </div>
@@ -58,13 +181,13 @@ export default function MapPage() {
               setIsNavSimulating(true);
               triggerHaptic([120, 50, 120]);
               showVisualToast({
-                title: 'Step Guidance Started',
-                subtitle: `Guiding along ${routes.accessible.name}`,
+                title: 'Live Guidance Active',
+                subtitle: `Guiding along step-free corridor to ${destination.name}`,
                 type: 'info'
               });
             }
           }}
-          className={`px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 shadow-md pointer-events-auto touch-active cursor-pointer transition-all ${
+          className={`px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 shadow-xl pointer-events-auto touch-active cursor-pointer transition-all ${
             isNavSimulating
               ? 'bg-rose-600 text-white'
               : 'bg-emerald-600 hover:bg-emerald-500 text-white'
@@ -86,7 +209,7 @@ export default function MapPage() {
 
       {/* Route Calculation Live Status Banner */}
       {isCalculatingRoute && (
-        <div className="absolute top-16 left-3 right-3 z-30 p-3 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border border-emerald-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
+        <div className="absolute top-16 left-3 right-3 z-[1000] p-3 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border border-emerald-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
           <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-xs font-bold text-white">Finding accessible route...</div>
@@ -97,16 +220,16 @@ export default function MapPage() {
 
       {/* Live Turn Banner (When walking guidance is active) */}
       {isNavSimulating && !isCalculatingRoute && (
-        <div className="absolute top-16 left-3 right-3 z-20 p-3.5 rounded-2xl bg-[#0f172a]/95 border border-emerald-500/60 shadow-xl animate-fade-in">
+        <div className="absolute top-16 left-3 right-3 z-[1000] p-3.5 rounded-2xl bg-[#0f172a]/95 border border-emerald-500/60 shadow-2xl animate-fade-in">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-base flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-base flex-shrink-0 shadow-md">
               ⬆️
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
                 Step {currentSimSegment + 1} of {routes.accessible.segments.length}
               </div>
-              <div className="text-xs font-bold text-white leading-tight">
+              <div className="text-xs font-bold text-white leading-tight truncate">
                 {routes.accessible.segments[currentSimSegment]?.text}
               </div>
               <div className="text-[11px] text-slate-300 mt-0.5">
@@ -117,200 +240,181 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Clean Humanized Map Canvas */}
-      <div className="w-full flex-1 relative bg-[#0e1626] select-none">
-        <svg className="w-full h-full" viewBox="0 0 400 520" preserveAspectRatio="xMidYMid slice">
-          
-          <defs>
-            <pattern id="mGrid" width="30" height="30" patternUnits="userSpaceOnUse">
-              <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#17223b" strokeWidth="0.8" />
-            </pattern>
-            <linearGradient id="accGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#059669" />
-            </linearGradient>
-            <linearGradient id="danGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#ef4444" />
-              <stop offset="100%" stopColor="#ea580c" />
-            </linearGradient>
-          </defs>
+      {/* Real OpenStreetMap Leaflet Map */}
+      <div className="w-full flex-1 relative bg-[#0b111e] z-0">
+        <MapContainer
+          center={[startLat, startLng]}
+          zoom={16}
+          scrollWheelZoom={true}
+          zoomControl={false}
+          className="w-full h-full"
+        >
+          {/* OpenStreetMap Base Tile Layer */}
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
 
-          {/* Background Grid */}
-          <rect width="100%" height="100%" fill="#0e1626" />
-          <rect width="100%" height="100%" fill="url(#mGrid)" opacity="0.7" />
+          {/* Dynamic Auto-Bounds to fit GPS coordinates */}
+          <MapBoundsUpdater 
+            originCoords={{ lat: startLat, lng: startLng }}
+            destCoords={{ lat: destLat, lng: destLng }}
+            barrierList={barriers}
+          />
 
-          {/* Street Geometry */}
-          <path d="M 20 180 Q 200 195 380 160" stroke="#1f2d47" strokeWidth="22" fill="none" strokeLinecap="round" />
-          <path d="M 50 360 Q 220 390 350 290" stroke="#152b28" strokeWidth="20" fill="none" strokeLinecap="round" />
-          <path d="M 120 70 L 80 440" stroke="#1f2d47" strokeWidth="16" fill="none" />
-          <path d="M 280 70 L 310 440" stroke="#1f2d47" strokeWidth="16" fill="none" />
-
-          {/* Street Name Labels */}
-          <text x="210" y="173" fill="#64748b" fontSize="7" fontWeight="600" letterSpacing="1">CENTRAL PLAZA</text>
-          <text x="200" y="380" fill="#059669" fontSize="7" fontWeight="600" letterSpacing="1">WEST PROMENADE (STEP-FREE)</text>
-
-          {/* Metro Start Hub */}
-          <rect x="35" y="140" width="70" height="55" rx="10" fill="#131e33" stroke="#334155" strokeWidth="1" />
-          <text x="70" y="168" fill="#cbd5e1" fontSize="8" textAnchor="middle" fontWeight="bold">🚇 METRO</text>
-          <text x="70" y="180" fill="#94a3b8" fontSize="7" textAnchor="middle">Gate 1 Start</text>
-
-          {/* Destination Hub */}
-          <rect x="290" y="150" width="85" height="75" rx="12" fill="#064e3b" fillOpacity="0.35" stroke="#10b981" strokeWidth="1.5" />
-          <text x="332" y="185" fill="#6ee7b7" fontSize="9" textAnchor="middle" fontWeight="bold">🏛️ LIBRARY</text>
-          <text x="332" y="198" fill="#a7f3d0" fontSize="7" textAnchor="middle">Gate 1 (Level 0)</text>
-          <text x="332" y="210" fill="#34d399" fontSize="7" textAnchor="middle">★ 94 Safe Score</text>
-
-          {/* 18 Steps Hazard Tag */}
-          <rect x="180" y="170" width="36" height="22" rx="4" fill="#7f1d1d" stroke="#ef4444" strokeWidth="1" />
-          <text x="198" y="184" fill="#fecaca" fontSize="7" textAnchor="middle" fontWeight="bold">18 STEPS</text>
-
-          {/* Route A: Fastest / Direct Path (Dashed Orange/Red with steps) */}
+          {/* Route A: Direct / Fastest Path (Red / Dashed) */}
           {(activeRouteView === 'fastest' || activeRouteView === 'both') && (
-            <g>
-              <path
-                d="M 70 170 L 198 181 L 305 185"
-                stroke="url(#danGradient)"
-                strokeWidth="4"
-                strokeDasharray="6 4"
-                fill="none"
-                strokeLinecap="round"
-              />
-              <rect x="120" y="146" width="94" height="18" rx="5" fill="#450a0a" stroke="#ef4444" strokeWidth="1" />
-              <text x="167" y="158" fill="#fca5a5" fontSize="7" textAnchor="middle" fontWeight="bold">
-                Direct: 6 min (32/100 🚫)
-              </text>
-            </g>
+            <Polyline
+              positions={directRouteCoords}
+              pathOptions={{
+                color: '#ef4444',
+                weight: 5,
+                dashArray: '8, 8',
+                opacity: 0.85
+              }}
+            />
           )}
 
-          {/* Route B: RAASTA Accessible Path (Solid Forest Green) */}
+          {/* Route B: Accessible Step-Free Path (Solid Emerald Green) */}
           {(activeRouteView === 'accessible' || activeRouteView === 'both') && (
-            <g>
-              <path
-                d="M 70 170 L 80 340 L 200 375 L 310 310 L 332 215"
-                stroke="#10b981"
-                strokeWidth="8"
-                strokeOpacity="0.25"
-                fill="none"
-                strokeLinecap="round"
+            <>
+              {/* Casing / Glow */}
+              <Polyline
+                positions={accessibleRouteCoords}
+                pathOptions={{
+                  color: '#065f46',
+                  weight: 10,
+                  opacity: 0.4
+                }}
               />
-              <path
-                d="M 70 170 L 80 340 L 200 375 L 310 310 L 332 215"
-                stroke="url(#accGradient)"
-                strokeWidth="4"
-                fill="none"
-                strokeLinecap="round"
+              {/* Main Line */}
+              <Polyline
+                positions={accessibleRouteCoords}
+                pathOptions={{
+                  color: '#10b981',
+                  weight: 6,
+                  opacity: 0.95
+                }}
               />
-              <rect x="135" y="392" width="124" height="18" rx="5" fill="#022c22" stroke="#10b981" strokeWidth="1" />
-              <text x="197" y="404" fill="#6ee7b7" fontSize="8" textAnchor="middle" fontWeight="bold">
-                Step-Free: 9 min (94/100 ♿)
-              </text>
-            </g>
+            </>
           )}
 
-          {/* Live User Position Indicator */}
+          {/* Start Origin Marker */}
+          <Marker position={[startLat, startLng]} icon={startIcon}>
+            <Popup>
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold uppercase text-emerald-400">Start Location</div>
+                <div className="text-xs font-bold text-white">{origin.name}</div>
+                <div className="text-[10px] text-slate-300">Verified Level-0 Ground Access</div>
+              </div>
+            </Popup>
+          </Marker>
+
+          {/* Destination Marker */}
+          <Marker position={[destLat, destLng]} icon={destIcon}>
+            <Popup>
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold uppercase text-cyan-400">Destination</div>
+                <div className="text-xs font-bold text-white">{destination.name}</div>
+                <div className="text-[10px] text-emerald-400 font-bold">★ {destination.accessibilityRating || 94}/100 Safe Score</div>
+              </div>
+            </Popup>
+          </Marker>
+
+          {/* Simulated User Position Indicator */}
           {isNavSimulating && (
-            <g transform={`translate(${
-              currentSimSegment === 0 ? 75 :
-              currentSimSegment === 1 ? 80 :
-              currentSimSegment === 2 ? 180 :
-              currentSimSegment === 3 ? 290 : 330
-            }, ${
-              currentSimSegment === 0 ? 210 :
-              currentSimSegment === 1 ? 330 :
-              currentSimSegment === 2 ? 375 :
-              currentSimSegment === 3 ? 315 : 220
-            })`}>
-              <circle cx="0" cy="0" r="12" fill="#10b981" opacity="0.3" className="radar-ping" />
-              <circle cx="0" cy="0" r="6" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
-            </g>
+            <Marker position={userLivePos} icon={userLiveIcon}>
+              <Popup>
+                <div className="text-xs font-bold text-emerald-300">Live GPS Location</div>
+              </Popup>
+            </Marker>
           )}
 
-          {/* Accessible Ramp & Pavement Pins */}
-          {showFeatures && (
-            <g>
-              <g 
-                transform="translate(180, 375)"
-                className="cursor-pointer"
-                onClick={() => setActivePin({
-                  title: 'Verified Gentle Ramp',
-                  desc: '1:12 slope with dual handrails on both sides.',
-                  type: 'feature'
-                })}
-              >
-                <circle cx="0" cy="0" r="9" fill="#065f46" stroke="#34d399" strokeWidth="1.5" />
-                <text x="0" y="3" textAnchor="middle" fontSize="8">♿</text>
-              </g>
-
-              <g 
-                transform="translate(290, 315)"
-                className="cursor-pointer"
-                onClick={() => setActivePin({
-                  title: 'Wide Tactile Sidewalk',
-                  desc: '2.4m wide flat path with yellow guiding tiles.',
-                  type: 'feature'
-                })}
-              >
-                <circle cx="0" cy="0" r="9" fill="#0e7490" stroke="#22d3ee" strokeWidth="1.5" />
-                <text x="0" y="3" textAnchor="middle" fontSize="8">🚶</text>
-              </g>
-            </g>
-          )}
-
-          {/* Obstacle Pins */}
-          {showObstacles && barriers.map((barr, idx) => {
-            const bx = idx === 0 ? 198 : 280;
-            const by = idx === 0 ? 181 : 210;
+          {/* Physical Barriers / Obstacles Pins */}
+          {showObstacles && barriers.map((barr) => {
+            const bLat = barr.coordinates?.lat || 28.6335;
+            const bLng = barr.coordinates?.lng || 77.2190;
             return (
-              <g 
-                key={barr.id}
-                transform={`translate(${bx}, ${by})`}
-                className="cursor-pointer"
-                onClick={() => setActivePin(barr)}
-              >
-                <circle cx="0" cy="0" r="10" fill="#dc2626" stroke="#fecaca" strokeWidth="1.5" />
-                <text x="0" y="3" textAnchor="middle" fontSize="8" fill="#ffffff" fontWeight="bold">⚠️</text>
-              </g>
+              <Marker key={barr.id} position={[bLat, bLng]} icon={obstacleIcon}>
+                <Popup>
+                  <div className="space-y-1 max-w-[200px]">
+                    <div className="text-[10px] font-bold uppercase text-rose-400">⚠️ Reported Barrier</div>
+                    <div className="text-xs font-bold text-white">{barr.title}</div>
+                    <p className="text-[10px] text-slate-300">{barr.description}</p>
+                    <div className="text-[9px] text-rose-300 font-semibold">{barr.severityLabel || 'Blocked for Wheelchairs'}</div>
+                  </div>
+                </Popup>
+              </Marker>
             );
           })}
 
-          {/* Start & End Labels */}
-          <g transform="translate(70, 170)">
-            <circle cx="0" cy="0" r="6" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
-            <text x="0" y="-8" fill="#34d399" fontSize="7" fontWeight="bold" textAnchor="middle">START</text>
-          </g>
+          {/* Accessible Features Pins (Ramps, Lifts, Tactile Paths) */}
+          {showFeatures && accessibleFeatures.map((feat) => {
+            const fLat = feat.coordinates?.lat || 28.6338;
+            const fLng = feat.coordinates?.lng || 77.2180;
+            const isRamp = feat.type === 'ramp';
+            return (
+              <Marker key={feat.id} position={[fLat, fLng]} icon={isRamp ? rampIcon : sidewalkIcon}>
+                <Popup>
+                  <div className="space-y-1 max-w-[200px]">
+                    <div className="text-[10px] font-bold uppercase text-emerald-400">
+                      {isRamp ? '♿ Verified Ramp' : '🚶 Tactile Sidewalk'}
+                    </div>
+                    <div className="text-xs font-bold text-white">{feat.title}</div>
+                    <p className="text-[10px] text-slate-300">{feat.description}</p>
+                    <div className="text-[9px] text-emerald-300 font-semibold">{feat.status || 'Verified Clear'}</div>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
-          <g transform="translate(332, 215)">
-            <circle cx="0" cy="0" r="7" fill="#06b6d4" stroke="#ffffff" strokeWidth="1.5" />
-            <text x="0" y="-10" fill="#38bdf8" fontSize="8" fontWeight="bold" textAnchor="middle">END</text>
-          </g>
+        </MapContainer>
+      </div>
 
-        </svg>
+      {/* Floating Map Layers Toggle (Obstacles & Features) */}
+      <div className="absolute right-3 bottom-44 z-[1000] flex flex-col gap-2">
+        <button
+          onClick={() => {
+            setShowObstacles(!showObstacles);
+            triggerHaptic([40]);
+          }}
+          className={`p-2.5 rounded-2xl shadow-xl border text-xs font-bold flex items-center justify-center transition-all ${
+            showObstacles
+              ? 'bg-rose-950/90 border-rose-500 text-rose-300 shadow-rose-950/40'
+              : 'bg-slate-900/90 border-slate-700 text-slate-400'
+          }`}
+          title="Toggle Obstacles"
+        >
+          <span className="text-sm">⚠️</span>
+        </button>
 
-        {/* Pin Popover */}
-        {activePin && (
-          <div className="absolute bottom-20 left-3 right-3 z-30 p-3.5 rounded-2xl bg-[#0f172a]/95 border border-slate-700 shadow-xl space-y-1 animate-fade-in">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-base">{activePin.type === 'feature' ? '♿' : '⚠️'}</span>
-                <h4 className="text-xs font-bold text-white">{activePin.title}</h4>
-              </div>
-              <button onClick={() => setActivePin(null)} className="text-slate-400 text-xs p-1">✕</button>
-            </div>
-            <p className="text-[11px] text-slate-300">{activePin.desc || activePin.description}</p>
-          </div>
-        )}
+        <button
+          onClick={() => {
+            setShowFeatures(!showFeatures);
+            triggerHaptic([40]);
+          }}
+          className={`p-2.5 rounded-2xl shadow-xl border text-xs font-bold flex items-center justify-center transition-all ${
+            showFeatures
+              ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-emerald-950/40'
+              : 'bg-slate-900/90 border-slate-700 text-slate-400'
+          }`}
+          title="Toggle Accessible Ramps"
+        >
+          <span className="text-sm">♿</span>
+        </button>
       </div>
 
       {/* Bottom Route Toggle Bar */}
-      <div className="p-3 bg-[#0f172a] border-t border-slate-800 space-y-2 z-20">
+      <div className="p-3 bg-[#0f172a] border-t border-slate-800 space-y-2 z-[1000]">
         
         {/* Route Select Tabs */}
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => setActiveRouteView('accessible')}
-            className={`p-2.5 rounded-xl border text-left transition-all touch-active ${
+            className={`p-2.5 rounded-xl border text-left transition-all touch-active cursor-pointer ${
               activeRouteView === 'accessible'
-                ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300'
+                ? 'bg-emerald-950/50 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/50'
                 : 'bg-slate-900 border-slate-800 text-slate-400'
             }`}
           >
@@ -320,9 +424,9 @@ export default function MapPage() {
 
           <button
             onClick={() => setActiveRouteView('fastest')}
-            className={`p-2.5 rounded-xl border text-left transition-all touch-active ${
+            className={`p-2.5 rounded-xl border text-left transition-all touch-active cursor-pointer ${
               activeRouteView === 'fastest'
-                ? 'bg-rose-950/40 border-rose-500 text-rose-300'
+                ? 'bg-rose-950/50 border-rose-500 text-rose-300 ring-1 ring-rose-500/50'
                 : 'bg-slate-900 border-slate-800 text-slate-400'
             }`}
           >
@@ -338,7 +442,7 @@ export default function MapPage() {
               setCurrentStep('results');
               triggerHaptic([50]);
             }}
-            className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 touch-active"
+            className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 touch-active cursor-pointer shadow-md"
           >
             <Route className="w-3.5 h-3.5" />
             <span>Route Details</span>
@@ -349,7 +453,7 @@ export default function MapPage() {
               setCurrentStep('report');
               triggerHaptic([50]);
             }}
-            className="py-2.5 px-3 rounded-xl bg-slate-800 border border-slate-700 text-purple-300 font-bold text-xs flex items-center justify-center gap-1.5 touch-active"
+            className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-purple-300 font-bold text-xs flex items-center justify-center gap-1.5 touch-active cursor-pointer"
           >
             <Camera className="w-3.5 h-3.5" />
             <span>Report Obstacle</span>
