@@ -9,6 +9,7 @@ import {
   useMap 
 } from 'react-leaflet';
 import L from 'leaflet';
+import { normalizeCoordinatesList } from '../utils/geoUtils';
 import { 
   Play, 
   Square, 
@@ -24,16 +25,34 @@ import {
 } from 'lucide-react';
 
 // Component to dynamically fit map bounds to route & markers
-function MapBoundsUpdater({ originCoords, destCoords, barrierList }) {
+function MapBoundsUpdater({ originCoords, destCoords, accessibleCoords, directCoords, barrierList }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!originCoords || !destCoords) return;
+    const points = [];
 
-    const points = [
-      [originCoords.lat, originCoords.lng],
-      [destCoords.lat, destCoords.lng]
-    ];
+    if (originCoords?.lat && originCoords?.lng) {
+      points.push([originCoords.lat, originCoords.lng]);
+    }
+    if (destCoords?.lat && destCoords?.lng) {
+      points.push([destCoords.lat, destCoords.lng]);
+    }
+
+    if (accessibleCoords && Array.isArray(accessibleCoords) && accessibleCoords.length > 0) {
+      accessibleCoords.forEach(p => {
+        if (Array.isArray(p) && p.length >= 2) {
+          points.push(p);
+        }
+      });
+    }
+
+    if (directCoords && Array.isArray(directCoords) && directCoords.length > 0) {
+      directCoords.forEach(p => {
+        if (Array.isArray(p) && p.length >= 2) {
+          points.push(p);
+        }
+      });
+    }
 
     if (barrierList && barrierList.length > 0) {
       barrierList.forEach(b => {
@@ -43,13 +62,15 @@ function MapBoundsUpdater({ originCoords, destCoords, barrierList }) {
       });
     }
 
-    try {
-      const bounds = L.latLngBounds(points);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17, animate: true });
-    } catch (e) {
-      console.warn('[Map] Fit bounds warning:', e);
+    if (points.length > 0) {
+      try {
+        const bounds = L.latLngBounds(points);
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17, animate: true });
+      } catch (e) {
+        console.warn('[Map] Fit bounds warning:', e);
+      }
     }
-  }, [originCoords, destCoords, barrierList, map]);
+  }, [originCoords, destCoords, accessibleCoords, directCoords, barrierList, map]);
 
   return null;
 }
@@ -91,29 +112,29 @@ export default function MapPage() {
   const destLat = destination.coordinates?.lat || 28.6358;
   const destLng = destination.coordinates?.lng || 77.2215;
 
-  // Real geographic paths
-  const directRouteCoords = [
-    [startLat, startLng],
-    [28.6335, 77.2190], // Coordinates of the 18 steps hazard
-    [destLat, destLng]
-  ];
+  // Backend Route Coordinates (Drawn strictly from backend response coordinates -> Leaflet Polyline)
+  // The frontend does not generate or synthesize its own route
+  const accessibleRouteCoords = routes?.accessible?.coordinates && routes.accessible.coordinates.length >= 2
+    ? normalizeCoordinatesList(routes.accessible.coordinates)
+    : [
+        [startLat, startLng],
+        [destLat, destLng]
+      ];
 
-  const accessibleRouteCoords = [
-    [startLat, startLng],
-    [startLat + 0.0007, startLng + 0.0005], // Ramp at Gate 1
-    [28.6338, 77.2180], // West Promenade
-    [28.6345, 77.2195], // Wide Tactile Path
-    [destLat, destLng]
-  ];
+  const directRouteCoords = routes?.fastest?.coordinates && routes.fastest.coordinates.length >= 2
+    ? normalizeCoordinatesList(routes.fastest.coordinates)
+    : [
+        [startLat, startLng],
+        [destLat, destLng]
+      ];
 
-  // Simulated GPS position
-  const simPositions = [
-    [startLat, startLng],
-    [startLat + 0.0007, startLng + 0.0005],
-    [28.6338, 77.2180],
-    [28.6345, 77.2195],
-    [destLat, destLng]
-  ];
+  // Simulated GPS position along the actual backend route coordinates
+  const simPositions = accessibleRouteCoords.length > 0
+    ? accessibleRouteCoords
+    : [
+        [startLat, startLng],
+        [destLat, destLng]
+      ];
   const userLivePos = simPositions[Math.min(currentSimSegment, simPositions.length - 1)];
 
   // Icons
@@ -257,10 +278,12 @@ export default function MapPage() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* Dynamic Auto-Bounds to fit GPS coordinates */}
+          {/* Dynamic Auto-Bounds to fit GPS coordinates & backend routes */}
           <MapBoundsUpdater 
             originCoords={{ lat: startLat, lng: startLng }}
             destCoords={{ lat: destLat, lng: destLng }}
+            accessibleCoords={accessibleRouteCoords}
+            directCoords={directRouteCoords}
             barrierList={barriers}
           />
 

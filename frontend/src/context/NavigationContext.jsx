@@ -9,6 +9,7 @@ import {
   DEAF_MODE_ALERTS
 } from '../data/mockData';
 import { fetchLocations, fetchBlockages, calculateRoute, reportBlockage } from '../api/apiClient';
+import { extractBackendRouteCoordinates } from '../utils/geoUtils';
 
 const NavigationContext = createContext(null);
 
@@ -92,33 +93,49 @@ export function NavigationProvider({ children }) {
       if (result) {
         console.log('[RAASTA] Received calculated route from backend Dev2:', result);
         setApiError(null);
-        // Map backend route response to frontend structure if returned
-        if (result.alternative_route || result.direct_route) {
-          setRoutes(prev => ({
-            fastest: {
-              ...prev.fastest,
-              durationMinutes: result.direct_route?.duration_minutes ?? prev.fastest.durationMinutes,
-              distanceMeters: result.direct_route?.distance_meters ?? prev.fastest.distanceMeters,
-              accessibilityScore: result.direct_route?.accessibility_score ?? (result.direct_route?.is_blocked ? 32 : 80),
-              barriers: result.direct_route?.blockages_found?.map(name => ({ name, type: 'stairs', severity: 'Critical' })) || prev.fastest.barriers,
-              coordinates: result.direct_route?.coordinates || prev.fastest.coordinates
-            },
-            accessible: {
-              ...prev.accessible,
-              durationMinutes: result.alternative_route?.duration_minutes ?? prev.accessible.durationMinutes,
-              distanceMeters: result.alternative_route?.distance_meters ?? prev.accessible.distanceMeters,
-              accessibilityScore: result.accessibility_score?.score ?? result.alternative_route?.accessibility_score ?? 94,
-              scoreRating: result.accessibility_score?.grade ?? 'Safe & Wheelchair Accessible',
-              segments: result.turn_by_turn?.map(t => ({
-                text: t.instruction || t.text,
-                distance: t.distance || '100m',
-                safe: !t.is_hazard && t.safe !== false,
-                highlight: t.highlight || t.visual_cue || 'Step-free'
-              })) || prev.accessible.segments,
-              coordinates: result.alternative_route?.coordinates || prev.accessible.coordinates
-            }
-          }));
-        }
+
+        // 1. Extract backend accessible coordinates (Backend -> coordinates -> Leaflet Polyline)
+        const backendAccessibleCoords = extractBackendRouteCoordinates(
+          result.alternative_route || 
+          result.accessible_route || 
+          result.safe_route || 
+          result.route || 
+          (result.coordinates ? result : null) ||
+          (result.routes && result.routes[0] ? result.routes[0] : null)
+        );
+
+        // 2. Extract backend direct / fastest coordinates
+        const backendDirectCoords = extractBackendRouteCoordinates(
+          result.direct_route || 
+          result.fastest_route ||
+          (result.routes && result.routes[1] ? result.routes[1] : null)
+        );
+
+        // Update state with backend coordinates
+        setRoutes(prev => ({
+          fastest: {
+            ...prev.fastest,
+            durationMinutes: result.direct_route?.duration_minutes ?? prev.fastest.durationMinutes,
+            distanceMeters: result.direct_route?.distance_meters ?? prev.fastest.distanceMeters,
+            accessibilityScore: result.direct_route?.accessibility_score ?? (result.direct_route?.is_blocked ? 32 : 80),
+            barriers: result.direct_route?.blockages_found?.map(name => ({ name, type: 'stairs', severity: 'Critical' })) || prev.fastest.barriers,
+            coordinates: backendDirectCoords.length > 0 ? backendDirectCoords : prev.fastest.coordinates
+          },
+          accessible: {
+            ...prev.accessible,
+            durationMinutes: result.alternative_route?.duration_minutes ?? result.duration_minutes ?? prev.accessible.durationMinutes,
+            distanceMeters: result.alternative_route?.distance_meters ?? result.distance_meters ?? prev.accessible.distanceMeters,
+            accessibilityScore: result.accessibility_score?.score ?? result.alternative_route?.accessibility_score ?? 94,
+            scoreRating: result.accessibility_score?.grade ?? 'Safe & Wheelchair Accessible',
+            segments: (result.turn_by_turn || result.segments || result.steps)?.map(t => ({
+              text: t.instruction || t.text || t.description,
+              distance: t.distance || '100m',
+              safe: !t.is_hazard && t.safe !== false,
+              highlight: t.highlight || t.visual_cue || 'Step-free'
+            })) || prev.accessible.segments,
+            coordinates: backendAccessibleCoords.length > 0 ? backendAccessibleCoords : prev.accessible.coordinates
+          }
+        }));
 
         if (result.visual_alerts && Array.isArray(result.visual_alerts) && result.visual_alerts.length > 0) {
           setDeafAlerts(result.visual_alerts.map((a, i) => ({

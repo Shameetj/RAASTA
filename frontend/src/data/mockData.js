@@ -242,6 +242,11 @@ export const MOCK_ROUTES_DATA = {
     hasRamp: false,
     sidewalkQuality: 'Narrow & broken pavement',
     entranceAccessibility: '3 steps at side gate',
+    coordinates: [
+      [28.6315, 77.2167],
+      [28.6335, 77.2190],
+      [28.6358, 77.2215]
+    ],
     barriers: [
       { name: '18-step pedestrian stairs (no ramp)', type: 'stairs', severity: 'Critical' },
       { name: 'Broken ramp lip with 5cm sudden drop', type: 'broken_ramp', severity: 'High' }
@@ -269,6 +274,13 @@ export const MOCK_ROUTES_DATA = {
     rampDetails: '2 Verified Ramps (1:12 slope, dual handrails, non-slip surface)',
     sidewalkQuality: '2.4m wide flat pavement with yellow tactile tiles',
     entranceAccessibility: 'Step-Free Automatic Sliding Door at Gate 1',
+    coordinates: [
+      [28.6315, 77.2167],
+      [28.6322, 77.2172],
+      [28.6338, 77.2180],
+      [28.6345, 77.2195],
+      [28.6358, 77.2215]
+    ],
     barriers: [],
     segments: [
       { text: 'Exit Metro Gate 1 via smooth ground ramp', distance: '60m', safe: true, highlight: 'Tactile curb cut' },
