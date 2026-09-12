@@ -3,7 +3,8 @@
  * Connects to Backend API (`http://localhost:8000/api`) with resilient offline fallback
  */
 
-const BASE_URL = 'http://localhost:8000/api';
+const BASE_URL =
+  import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export async function fetchLocations() {
   try {

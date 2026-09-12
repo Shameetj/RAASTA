@@ -40,17 +40,72 @@ export function NavigationProvider({ children }) {
   // Try fetching dynamic backend data on mount
   useEffect(() => {
     async function loadBackendData() {
-      const locs = await fetchLocations();
-      if (locs && locs.length > 0) {
-        // Can map backend locations if available
-      }
       const blocks = await fetchBlockages();
-      if (blocks && blocks.length > 0) {
-        setBarriers(blocks);
+      if (blocks && Array.isArray(blocks) && blocks.length > 0) {
+        console.log('[RAASTA] Received real blockages from backend:', blocks);
+        // Normalize backend fields
+        const normalized = blocks.map((b, idx) => ({
+          id: b.id || `barr-${idx}`,
+          title: b.title || 'Reported Obstacle',
+          type: b.type || 'stairs',
+          typeLabel: b.type === 'stairs' ? 'Pedestrian Stairs' : b.type === 'broken_ramp' ? 'Damaged Ramp' : 'Blocked Sidewalk',
+          severity: b.severity || 'high',
+          locationName: b.location_name || b.locationName || 'Demo Corridor',
+          coordinates: b.coordinates || { lat: b.latitude || 28.6335, lng: b.longitude || 77.2190 },
+          reportedAt: b.reported_at || b.reportedAt || 'Verified',
+          verificationStatus: 'Verified by Backend',
+          decayStatus: 'Active',
+          description: b.description || 'Obstacle loaded from backend database.',
+          isOnRouteA: true,
+          isOnRouteB: false
+        }));
+        setBarriers(normalized);
       }
     }
     loadBackendData();
   }, []);
+
+  // Calculate route using Dev2 endpoint when destination/profile changes
+  const requestRouteCalculation = async (targetDest = destination, profileId = selectedProfileId) => {
+    try {
+      const result = await calculateRoute({
+        start: { lat: origin.coordinates.lat, lng: origin.coordinates.lng, name: origin.name },
+        destination: { lat: targetDest.coordinates.lat, lng: targetDest.coordinates.lng, name: targetDest.name },
+        profile: profileId
+      });
+
+      if (result) {
+        console.log('[RAASTA] Received calculated route from backend Dev2:', result);
+        // Map backend route response to frontend structure if returned
+        if (result.alternative_route || result.direct_route) {
+          setRoutes(prev => ({
+            fastest: {
+              ...prev.fastest,
+              durationMinutes: result.direct_route?.duration_minutes || prev.fastest.durationMinutes,
+              distanceMeters: result.direct_route?.distance_meters || prev.fastest.distanceMeters,
+              accessibilityScore: result.direct_route?.accessibility_score || 32,
+              barriers: result.direct_route?.blockages_found?.map(name => ({ name, type: 'stairs', severity: 'Critical' })) || prev.fastest.barriers
+            },
+            accessible: {
+              ...prev.accessible,
+              durationMinutes: result.alternative_route?.duration_minutes || prev.accessible.durationMinutes,
+              distanceMeters: result.alternative_route?.distance_meters || prev.accessible.distanceMeters,
+              accessibilityScore: result.accessibility_score?.score || 94,
+              scoreRating: result.accessibility_score?.grade || 'Safe & Accessible',
+              segments: result.turn_by_turn?.map(t => ({
+                text: t.instruction || t.text,
+                distance: t.distance || '100m',
+                safe: t.safe !== false,
+                highlight: t.highlight || t.visual_cue || 'Step-free'
+              })) || prev.accessible.segments
+            }
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('[RAASTA] Route calculation using verified fallback:', e);
+    }
+  };
 
   const handleSelectProfile = (profileId) => {
     setSelectedProfileId(profileId);
@@ -58,6 +113,7 @@ export function NavigationProvider({ children }) {
     if (prof) {
       setPreferences(prof.defaultPreferences);
     }
+    requestRouteCalculation(destination, profileId);
   };
 
   const triggerHaptic = (pattern = [120, 60, 120]) => {
@@ -186,7 +242,8 @@ export function NavigationProvider({ children }) {
     setEmergencyStrobeActive,
     addBarrierReport,
     civicModalOpen,
-    setCivicModalOpen
+    setCivicModalOpen,
+    requestRouteCalculation
   };
 
   return (

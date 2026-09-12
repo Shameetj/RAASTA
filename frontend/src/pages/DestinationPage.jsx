@@ -23,7 +23,8 @@ export default function DestinationPage() {
     setCurrentStep,
     selectedProfile,
     triggerHaptic,
-    showVisualToast
+    showVisualToast,
+    requestRouteCalculation
   } = useNavigation();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -146,6 +147,7 @@ export default function DestinationPage() {
               key={dest.id}
               onClick={() => {
                 setDestination(dest);
+                requestRouteCalculation(dest, selectedProfile.id);
                 triggerHaptic([40, 20]);
               }}
               className={`p-3.5 rounded-2xl border transition-all touch-active cursor-pointer ${
@@ -189,6 +191,7 @@ export default function DestinationPage() {
       {/* CTA Button */}
       <button
         onClick={() => {
+          requestRouteCalculation(destination, selectedProfile.id);
           setCurrentStep('map');
           triggerHaptic([60, 30]);
           showVisualToast({
