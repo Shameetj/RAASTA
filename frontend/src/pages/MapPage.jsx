@@ -25,7 +25,8 @@ export default function MapPage() {
     setIsNavSimulating,
     currentSimSegment,
     triggerHaptic,
-    showVisualToast
+    showVisualToast,
+    isCalculatingRoute
   } = useNavigation();
 
   const [activeRouteView, setActiveRouteView] = useState('accessible'); // 'accessible' | 'fastest' | 'both'
@@ -83,8 +84,19 @@ export default function MapPage() {
         </button>
       </div>
 
+      {/* Route Calculation Live Status Banner */}
+      {isCalculatingRoute && (
+        <div className="absolute top-16 left-3 right-3 z-30 p-3 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border border-emerald-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
+          <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-white">Finding accessible route...</div>
+            <div className="text-[10px] text-emerald-400 truncate">Calculating safest accessible route for {selectedProfile.name}</div>
+          </div>
+        </div>
+      )}
+
       {/* Live Turn Banner (When walking guidance is active) */}
-      {isNavSimulating && (
+      {isNavSimulating && !isCalculatingRoute && (
         <div className="absolute top-16 left-3 right-3 z-20 p-3.5 rounded-2xl bg-[#0f172a]/95 border border-emerald-500/60 shadow-xl animate-fade-in">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-base flex-shrink-0">

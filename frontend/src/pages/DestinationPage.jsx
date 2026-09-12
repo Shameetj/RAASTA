@@ -12,7 +12,10 @@ import {
   GraduationCap, 
   ArrowRight, 
   Navigation, 
-  CheckCircle2 
+  CheckCircle2,
+  Route,
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function DestinationPage() {
@@ -100,7 +103,47 @@ export default function DestinationPage() {
   };
 
   return (
-    <div className="p-4 space-y-4 pb-8 animate-fade-in">
+    <div className="p-4 space-y-4 pb-8 animate-fade-in relative">
+
+      {/* Calculating Accessible Route Full Loading Modal */}
+      {isLoadingRoutes && (
+        <div className="fixed inset-0 z-50 bg-[#0a0f1d]/92 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+          <div className="relative mb-5">
+            <div className="w-20 h-20 rounded-full bg-emerald-500/20 animate-ping absolute inset-0 m-auto" />
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-xl relative z-10 border border-emerald-400/40">
+              <Route className="w-8 h-8 animate-pulse text-white" />
+            </div>
+          </div>
+
+          <h3 className="text-lg font-bold text-white font-display tracking-tight mb-1">
+            Finding accessible route...
+          </h3>
+          <p className="text-xs text-slate-300 max-w-[260px] mb-5 leading-relaxed">
+            Calculating safest accessible route to <strong className="text-emerald-400">{destination.name}</strong> for {selectedProfile.name}
+          </p>
+
+          {/* Diagnostic Step Checklist */}
+          <div className="w-full max-w-xs bg-[#131b2e] border border-slate-800 rounded-2xl p-3.5 space-y-2.5 text-left mb-4 shadow-xl">
+            <div className="flex items-center gap-2.5 text-xs text-slate-300">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Scanning 18-step stairs & blocked paths</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-xs text-slate-300">
+              <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+              <span>Evaluating 1:12 ramp slopes & wide sidewalks</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-xs text-slate-300">
+              <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span>Generating step-free turn guidance & score</span>
+            </div>
+          </div>
+
+          {/* Animated Glowing Progress Bar */}
+          <div className="w-full max-w-xs h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300 rounded-full animate-pulse w-full" />
+          </div>
+        </div>
+      )}
       
       {/* Title */}
       <div className="space-y-1">
