@@ -1,43 +1,55 @@
 /**
  * RAASTA Mobile API Client
- * Real Backend Connection & Strict Error Handling
+ * Primary Target: POST http://26.110.10.242:8000/api/routes/calculate
+ * Resilient Local Fallback: http://localhost:8000/api
  */
 
-const BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
+const PRIMARY_URL = import.meta.env.VITE_API_URL || 'http://26.110.10.242:8000/api';
+const LOCAL_FALLBACK_URL = 'http://localhost:8000/api';
 const SERVER_ERROR_MESSAGE = 'Unable to connect to RAASTA server. Please try again.';
 
-export async function fetchLocations() {
+async function resilientFetch(endpoint, options = {}, timeoutMs = 3500) {
+  // 1. Primary Target (e.g. Dev2 at http://26.110.10.242:8000/api)
   try {
-    const res = await fetch(`${BASE_URL}/locations`, {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(4000)
+    const res = await fetch(`${PRIMARY_URL}${endpoint}`, {
+      ...options,
+      signal: AbortSignal.timeout(timeoutMs)
     });
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+    if (res.ok) {
+      return await res.json();
     }
-    return await res.json();
   } catch (err) {
-    console.error('[API Error] GET /locations failed:', err);
-    throw new Error(SERVER_ERROR_MESSAGE);
+    console.warn(`[RAASTA API] Primary server (${PRIMARY_URL}) unreachable, checking local fallback...`);
   }
+
+  // 2. Local Fallback (http://localhost:8000/api)
+  if (PRIMARY_URL !== LOCAL_FALLBACK_URL) {
+    try {
+      const resLocal = await fetch(`${LOCAL_FALLBACK_URL}${endpoint}`, {
+        ...options,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (resLocal.ok) {
+        return await resLocal.json();
+      }
+    } catch (errLocal) {
+      console.warn(`[RAASTA API] Local fallback server (${LOCAL_FALLBACK_URL}) unreachable.`);
+    }
+  }
+
+  throw new Error(SERVER_ERROR_MESSAGE);
+}
+
+export async function fetchLocations() {
+  return await resilientFetch('/locations', {
+    headers: { 'Accept': 'application/json' }
+  });
 }
 
 export async function fetchBlockages() {
-  try {
-    const res = await fetch(`${BASE_URL}/blockages`, {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
-    }
-    return await res.json();
-  } catch (err) {
-    console.error('[API Error] GET /blockages failed:', err);
-    throw new Error(SERVER_ERROR_MESSAGE);
-  }
+  return await resilientFetch('/blockages', {
+    headers: { 'Accept': 'application/json' }
+  });
 }
 
 export async function calculateRoute({ start, destination, profile }) {
@@ -58,28 +70,17 @@ export async function calculateRoute({ start, destination, profile }) {
     profile: profile === 'deaf' ? 'deaf' : 'wheelchair'
   };
 
-  try {
-    const res = await fetch(`${BASE_URL}/routes/calculate`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000)
-    });
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
-    }
-    return await res.json();
-  } catch (err) {
-    console.error('[API Error] POST /routes/calculate failed:', err);
-    throw new Error(SERVER_ERROR_MESSAGE);
-  }
+  return await resilientFetch('/routes/calculate', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  }, 5000);
 }
 
 export async function reportBlockage(blockageData) {
-  // Convert coordinates.lat -> latitude and coordinates.lng -> longitude
   const lat = blockageData.latitude !== undefined 
     ? Number(blockageData.latitude)
     : (blockageData.coordinates?.lat !== undefined ? Number(blockageData.coordinates.lat) : Number(blockageData.lat ?? 15.4900));
@@ -97,38 +98,18 @@ export async function reportBlockage(blockageData) {
     severity: (blockageData.severity || 'high').toLowerCase()
   };
 
-  try {
-    const res = await fetch(`${BASE_URL}/blockages`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000)
-    });
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
-    }
-    return await res.json();
-  } catch (err) {
-    console.error('[API Error] POST /blockages failed:', err);
-    throw new Error(SERVER_ERROR_MESSAGE);
-  }
+  return await resilientFetch('/blockages', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  }, 5000);
 }
 
 export async function resetDemoData() {
-  try {
-    const res = await fetch(`${BASE_URL}/demo/reset`, { 
-      method: 'POST', 
-      signal: AbortSignal.timeout(3000) 
-    });
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
-    }
-    return await res.json();
-  } catch (err) {
-    console.error('[API Error] POST /demo/reset failed:', err);
-    throw new Error(SERVER_ERROR_MESSAGE);
-  }
+  return await resilientFetch('/demo/reset', { 
+    method: 'POST' 
+  }, 3000);
 }
