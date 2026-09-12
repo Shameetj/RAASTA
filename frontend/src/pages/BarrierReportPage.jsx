@@ -57,9 +57,12 @@ export default function BarrierReportPage() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     triggerHaptic([150, 80, 200]);
+    setIsSubmitting(true);
 
     try {
       confetti({
@@ -70,17 +73,27 @@ export default function BarrierReportPage() {
       });
     } catch (err) {}
 
-    addBarrierReport({
-      title: barrierType === 'stairs' ? 'Pedestrian Stairs (No Ramp)' : barrierType === 'broken_ramp' ? 'Damaged Ramp Lip' : 'Blocked Sidewalk Obstruction',
-      category: barrierType,
-      typeLabel: barrierType === 'stairs' ? 'Pedestrian Stairs' : 'Damaged Ramp',
-      severity: severity,
-      locationName: locationName,
-      imageUrl: photoPreview,
-      description: notes || 'Obstacle reported via mobile app.'
-    });
+    try {
+      await addBarrierReport({
+        title: notes || (barrierType === 'stairs' ? 'Integration Test Stairs' : barrierType === 'broken_ramp' ? 'Damaged Ramp Lip' : 'Blocked Sidewalk Obstruction'),
+        category: barrierType,
+        type: barrierType,
+        typeLabel: barrierType === 'stairs' ? 'Pedestrian Stairs' : 'Damaged Ramp',
+        severity: severity,
+        locationName: locationName,
+        coordinates: selectedPreset?.coordinates || { lat: 15.4900, lng: 73.8270 },
+        latitude: selectedPreset?.coordinates?.lat ?? 15.4900,
+        longitude: selectedPreset?.coordinates?.lng ?? 73.8270,
+        imageUrl: photoPreview,
+        description: notes || (barrierType === 'stairs' ? 'Stairs blocking accessible path' : 'Obstacle blocking accessible path')
+      });
 
-    setIsSubmitted(true);
+      setIsSubmitted(true);
+    } catch (err) {
+      console.error('[BarrierReportPage] Error reporting blockage:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -122,8 +135,10 @@ export default function BarrierReportPage() {
               <div className="text-xs font-bold text-emerald-400">{barrierType.replace('_', ' ').toUpperCase()}</div>
             </div>
             <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-              <div className="text-[10px] text-slate-400">Active Detour</div>
-              <div className="text-xs font-bold text-purple-400">+1.2 min safe bypass</div>
+              <div className="text-[10px] text-slate-400">Route Status</div>
+              <div className="text-xs font-bold text-purple-400">
+                {routes.accessible.rerouted ? '✓ Alternative detour' : (routes.accessible.status || 'Recalculated')}
+              </div>
             </div>
           </div>
 
@@ -300,10 +315,13 @@ export default function BarrierReportPage() {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-950/40 touch-active cursor-pointer"
+            disabled={isSubmitting}
+            className={`w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-950/40 touch-active cursor-pointer ${
+              isSubmitting ? 'opacity-70 cursor-wait' : ''
+            }`}
           >
             <Camera className="w-4 h-4" />
-            <span>Submit Barrier Report</span>
+            <span>{isSubmitting ? 'Uploading to Dev1 & Rerouting...' : 'Submit Barrier Report'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
 

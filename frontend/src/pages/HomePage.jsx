@@ -100,16 +100,16 @@ export default function HomePage() {
         {/* City Stats */}
         <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-800 text-center">
           <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800/80">
-            <div className="text-base font-extrabold text-emerald-400 font-display">94/100</div>
-            <div className="text-[10px] text-slate-400">Safe Route Score</div>
+            <div className="text-base font-extrabold text-emerald-400 font-display">Live</div>
+            <div className="text-[10px] text-slate-400">Route Engine</div>
           </div>
           <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800/80">
             <div className="text-base font-extrabold text-cyan-400 font-display">0 Steps</div>
-            <div className="text-[10px] text-slate-400">Stairs on Safe Path</div>
+            <div className="text-[10px] text-slate-400">On Detour Path</div>
           </div>
           <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800/80">
-            <div className="text-base font-extrabold text-purple-400 font-display">340+</div>
-            <div className="text-[10px] text-slate-400">Verified Ramps</div>
+            <div className="text-base font-extrabold text-purple-400 font-display">Active</div>
+            <div className="text-[10px] text-slate-400">Obstacle Avoidance</div>
           </div>
         </div>
       </div>

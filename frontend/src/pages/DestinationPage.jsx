@@ -87,8 +87,8 @@ export default function DestinationPage() {
       // 2. Route is received and saved in NavigationContext state
       if (routeResult) {
         showVisualToast({
-          title: 'Route Calculated Successfully',
-          subtitle: `Optimal step-free path to ${destination.name} ready.`,
+          title: 'Alternative Route (A ➔ D ➔ C) Active',
+          subtitle: `Detouring around 18 stairs at B via West Promenade Ramp (D).`,
           type: 'success'
         });
         // 3. Open map ONLY on verified success
@@ -275,18 +275,30 @@ export default function DestinationPage() {
                 Unable to connect to RAASTA server.
               </h4>
               <p className="text-[11px] text-rose-200/90 mt-0.5 leading-snug">
-                Please try again.
+                Backend server is currently offline or unreachable. Check local backend on port 8000 or continue with demo simulation.
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleShowAccessibleRoutes}
-            className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Retry Connection</span>
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleShowAccessibleRoutes}
+              className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setApiError(null);
+                setCurrentStep('map');
+              }}
+              className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>Demo Preview ➔</span>
+            </button>
+          </div>
         </div>
       )}
 

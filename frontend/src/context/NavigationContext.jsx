@@ -13,6 +13,38 @@ import { extractBackendRouteCoordinates } from '../utils/geoUtils';
 
 const NavigationContext = createContext(null);
 
+const INITIAL_ROUTES_STATE = {
+  accessible: {
+    id: 'route-accessible',
+    name: 'Accessible Route',
+    coordinates: [],
+    distanceMeters: null,
+    durationMinutes: null,
+    durationSeconds: null,
+    rerouted: false,
+    status: 'Ready to calculate',
+    score: null,
+    scoreRating: null,
+    alerts: [],
+    message: '',
+    summary: 'Accessible route calculated from real-time coordinates.',
+    segments: []
+  },
+  fastest: {
+    id: 'route-fastest',
+    name: 'Direct Route',
+    coordinates: [],
+    distanceMeters: null,
+    durationMinutes: null,
+    durationSeconds: null,
+    isBlocked: false,
+    blockedReason: null,
+    score: null,
+    barriers: [],
+    segments: []
+  }
+};
+
 export function NavigationProvider({ children }) {
   const [currentStep, setCurrentStep] = useState('home'); // 'home' | 'profile' | 'destination' | 'map' | 'results' | 'report'
   const [selectedProfileId, setSelectedProfileId] = useState('wheelchair');
@@ -23,7 +55,7 @@ export function NavigationProvider({ children }) {
   
   const [barriers, setBarriers] = useState(INITIAL_BARRIERS);
   const [accessibleFeatures, setAccessibleFeatures] = useState(INITIAL_ACCESSIBLE_FEATURES);
-  const [routes, setRoutes] = useState(MOCK_ROUTES_DATA);
+  const [routes, setRoutes] = useState(INITIAL_ROUTES_STATE);
   
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [isMobileFrameView, setIsMobileFrameView] = useState(true); // Default to realistic mobile frame for showcase
@@ -48,23 +80,40 @@ export function NavigationProvider({ children }) {
         const blocks = await fetchBlockages();
         if (blocks && Array.isArray(blocks) && blocks.length > 0) {
           console.log('[RAASTA] Received real blockages from backend:', blocks);
-          // Normalize backend fields
-          const normalized = blocks.map((b, idx) => ({
-            id: b.id || `barr-${idx}`,
-            title: b.title || 'Reported Obstacle',
-            type: b.type || 'stairs',
-            typeLabel: b.type === 'stairs' ? 'Pedestrian Stairs' : b.type === 'broken_ramp' ? 'Damaged Ramp' : 'Blocked Sidewalk',
-            severity: b.severity || 'high',
-            locationName: b.location_name || b.locationName || 'Demo Corridor',
-            coordinates: b.coordinates || { lat: b.latitude || 28.6335, lng: b.longitude || 77.2190 },
-            reportedAt: b.reported_at || b.reportedAt || 'Verified',
-            verificationStatus: 'Verified by Backend',
-            decayStatus: 'Active',
-            description: b.description || 'Obstacle loaded from backend database.',
-            isOnRouteA: true,
-            isOnRouteB: false
-          }));
-          setBarriers(normalized);
+          // Normalize backend fields for each blockage
+          const normalized = blocks.map((b, idx) => {
+            const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
+            const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
+            const rawType = (b.type || 'stairs').toLowerCase();
+            const typeLabel = rawType === 'stairs' ? 'Stairs' : 
+                              rawType === 'broken_ramp' ? 'Broken Ramp' : 
+                              rawType === 'construction' ? 'Construction' :
+                              (rawType.charAt(0).toUpperCase() + rawType.slice(1));
+            const severity = (b.severity || 'high').toLowerCase();
+            const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
+            const description = b.description || (rawType === 'stairs' ? 'Stairs blocking sidewalk' : `${typeLabel} blocking sidewalk`);
+
+            return {
+              id: b.id || `barr-${idx}-${lat}-${lng}`,
+              title: b.title || typeLabel,
+              type: rawType,
+              typeLabel: typeLabel,
+              severity: severity,
+              severityLabel: severityLabel,
+              locationName: b.location_name || b.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+              coordinates: { lat, lng },
+              reportedAt: b.reported_at || b.reportedAt || 'Verified by Backend',
+              verificationStatus: 'Verified by Backend',
+              decayStatus: 'Active',
+              description: description,
+              isOnRouteA: true,
+              isOnRouteB: false
+            };
+          }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
+
+          if (normalized.length > 0) {
+            setBarriers(normalized);
+          }
           setApiError(null);
         }
       } catch (err) {
@@ -84,68 +133,130 @@ export function NavigationProvider({ children }) {
   const requestRouteCalculation = async (targetDest = destination, profileId = selectedProfileId) => {
     setIsCalculatingRoute(true);
     try {
+      const startLat = origin.coordinates?.lat ?? 28.6315;
+      const startLng = origin.coordinates?.lng ?? 77.2167;
+      const destLat = targetDest.coordinates?.lat ?? 28.6358;
+      const destLng = targetDest.coordinates?.lng ?? 77.2215;
+
       const result = await calculateRoute({
-        start: { lat: origin.coordinates.lat, lng: origin.coordinates.lng, name: origin.name },
-        destination: { lat: targetDest.coordinates.lat, lng: targetDest.coordinates.lng, name: targetDest.name },
-        profile: profileId
+        start: { latitude: Number(startLat), longitude: Number(startLng) },
+        destination: { latitude: Number(destLat), longitude: Number(destLng) },
+        profile: profileId === 'deaf' ? 'deaf' : 'wheelchair'
       });
 
       if (result) {
-        console.log('[RAASTA] Received calculated route from backend Dev2:', result);
+        console.log('[RAASTA] Received calculated route from backend:', result);
         setApiError(null);
 
         // 1. Extract backend accessible coordinates (Backend -> coordinates -> Leaflet Polyline)
+        const routeData = result.route || result;
         const backendAccessibleCoords = extractBackendRouteCoordinates(
+          routeData.coordinates ||
+          routeData ||
           result.alternative_route || 
           result.accessible_route || 
           result.safe_route || 
-          result.route || 
           (result.coordinates ? result : null) ||
           (result.routes && result.routes[0] ? result.routes[0] : null)
         );
 
-        // 2. Extract backend direct / fastest coordinates
+        // 2. Extract backend direct coordinates
         const backendDirectCoords = extractBackendRouteCoordinates(
           result.direct_route || 
           result.fastest_route ||
           (result.routes && result.routes[1] ? result.routes[1] : null)
         );
 
-        // Update state with backend coordinates
+        // 3. Extract actual backend distance, duration, rerouted status, alerts
+        const distanceMeters = routeData.distance_meters !== undefined ? Number(routeData.distance_meters) : null;
+        const durationSeconds = routeData.duration_seconds !== undefined ? Number(routeData.duration_seconds) : null;
+        const durationMinutes = durationSeconds !== null ? Math.max(1, Math.round(durationSeconds / 60)) : null;
+        const isRerouted = Boolean(result.rerouted);
+        const alertsList = Array.isArray(result.alerts) ? result.alerts : (Array.isArray(result.visual_alerts) ? result.visual_alerts : []);
+
+        // 4. Real score ONLY if returned by backend (do NOT fabricate)
+        const realScore = result.accessibility_score?.score ?? result.score ?? routeData.score ?? null;
+        const realScoreRating = result.accessibility_score?.grade ?? result.score_rating ?? null;
+
+        // Update state with genuine backend route information
         setRoutes(prev => ({
           fastest: {
             ...prev.fastest,
-            durationMinutes: result.direct_route?.duration_minutes ?? prev.fastest.durationMinutes,
-            distanceMeters: result.direct_route?.distance_meters ?? prev.fastest.distanceMeters,
-            accessibilityScore: result.direct_route?.accessibility_score ?? (result.direct_route?.is_blocked ? 32 : 80),
-            barriers: result.direct_route?.blockages_found?.map(name => ({ name, type: 'stairs', severity: 'Critical' })) || prev.fastest.barriers,
-            coordinates: backendDirectCoords.length > 0 ? backendDirectCoords : prev.fastest.coordinates
+            name: result.direct_route?.name || 'Direct Route',
+            durationMinutes: result.direct_route?.duration_seconds ? Math.round(result.direct_route.duration_seconds / 60) : null,
+            distanceMeters: result.direct_route?.distance_meters ?? null,
+            isBlocked: isRerouted,
+            blockedReason: alertsList.length > 0 ? (typeof alertsList[0] === 'string' ? alertsList[0] : alertsList[0].message) : (isRerouted ? 'Blockage detected on direct route' : null),
+            score: null,
+            coordinates: backendDirectCoords.length > 0 ? backendDirectCoords : []
           },
           accessible: {
             ...prev.accessible,
-            durationMinutes: result.alternative_route?.duration_minutes ?? result.duration_minutes ?? prev.accessible.durationMinutes,
-            distanceMeters: result.alternative_route?.distance_meters ?? result.distance_meters ?? prev.accessible.distanceMeters,
-            accessibilityScore: result.accessibility_score?.score ?? result.alternative_route?.accessibility_score ?? 94,
-            scoreRating: result.accessibility_score?.grade ?? 'Safe & Wheelchair Accessible',
+            name: isRerouted ? 'Alternative Accessible Route' : 'Accessible Route',
+            durationMinutes: durationMinutes,
+            durationSeconds: durationSeconds,
+            distanceMeters: distanceMeters,
+            rerouted: isRerouted,
+            status: isRerouted ? '✓ Alternative route found' : '✓ Accessible route found',
+            score: realScore,
+            scoreRating: realScoreRating,
+            alerts: alertsList,
+            message: result.message || (isRerouted ? 'Alternative detour route calculated to bypass blockage.' : 'Accessible route calculated successfully.'),
+            summary: isRerouted ? 'Detour around blockage.' : 'Direct step-free route.',
             segments: (result.turn_by_turn || result.segments || result.steps)?.map(t => ({
               text: t.instruction || t.text || t.description,
-              distance: t.distance || '100m',
+              distance: t.distance || '',
               safe: !t.is_hazard && t.safe !== false,
-              highlight: t.highlight || t.visual_cue || 'Step-free'
-            })) || prev.accessible.segments,
-            coordinates: backendAccessibleCoords.length > 0 ? backendAccessibleCoords : prev.accessible.coordinates
+              highlight: t.highlight || t.visual_cue || ''
+            })) || [],
+            coordinates: backendAccessibleCoords
           }
         }));
 
-        if (result.visual_alerts && Array.isArray(result.visual_alerts) && result.visual_alerts.length > 0) {
-          setDeafAlerts(result.visual_alerts.map((a, i) => ({
+        // Parse Backend Alerts for deaf/visual mode
+        if (alertsList.length > 0) {
+          setDeafAlerts(alertsList.map((a, i) => ({
             id: `alert-backend-${i}`,
-            title: a.title || 'Navigation Alert',
-            subtitle: a.message || a.subtitle || '',
-            type: a.level === 'warning' || a.level === 'danger' ? 'hazard' : 'nav_cue',
-            severity: a.level || 'info',
+            title: typeof a === 'string' ? 'Blockage detected' : (a.title || 'Blockage detected'),
+            subtitle: typeof a === 'string' ? a : (a.message || ''),
+            type: 'hazard',
+            severity: (typeof a === 'object' && a.severity) || 'high',
             timestamp: 'Real-time'
           })));
+        }
+
+        // Parse Backend Blockages
+        if (result.blockages && Array.isArray(result.blockages) && result.blockages.length > 0) {
+          const parsedBlockages = result.blockages.map((b, i) => {
+            const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
+            const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
+            const rawType = (b.type || 'stairs').toLowerCase();
+            const typeLabel = rawType === 'stairs' ? 'Stairs' : (rawType.charAt(0).toUpperCase() + rawType.slice(1));
+            const severity = (b.severity || 'high').toLowerCase();
+            const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
+            const description = b.description || (rawType === 'stairs' ? 'Stairs blocking sidewalk' : `${typeLabel} blocking sidewalk`);
+
+            return {
+              id: b.id || `barr-backend-${i}-${lat}-${lng}`,
+              title: b.title || typeLabel,
+              type: rawType,
+              typeLabel: typeLabel,
+              severity: severity,
+              severityLabel: severityLabel,
+              locationName: b.location_name || b.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+              coordinates: { lat, lng },
+              reportedAt: 'Verified by Backend',
+              verificationStatus: 'Verified by Backend',
+              decayStatus: 'Active',
+              description: description,
+              isOnRouteA: true,
+              isOnRouteB: false
+            };
+          }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
+
+          if (parsedBlockages.length > 0) {
+            setBarriers(parsedBlockages);
+          }
         }
 
         return result;
@@ -195,49 +306,82 @@ export function NavigationProvider({ children }) {
     }, 4000);
   };
 
-  // Add barrier report and dynamically trigger reroute
+  // Add barrier report to Dev1 and recalculate route dynamically
   const addBarrierReport = async (newBarrier) => {
-    const barrierObj = {
-      id: `barr-${Date.now()}`,
-      title: newBarrier.title || 'Reported Obstacle',
-      type: newBarrier.category || 'stairs',
-      typeLabel: newBarrier.typeLabel || 'Hazard Obstacle',
-      severity: newBarrier.severity || 'high',
-      severityLabel: `${newBarrier.severity?.toUpperCase()} Severity Barrier`,
-      locationName: newBarrier.locationName || `${destination.name} Corridor`,
-      coordinates: newBarrier.coordinates || { lat: 28.6342, lng: 77.2198 },
+    // 1. Convert coordinates: coordinates.lat -> latitude, coordinates.lng -> longitude
+    const lat = Number(newBarrier.latitude ?? newBarrier.coordinates?.lat ?? newBarrier.lat ?? 15.4900);
+    const lng = Number(newBarrier.longitude ?? newBarrier.coordinates?.lng ?? newBarrier.lng ?? 73.8270);
+    const rawType = (newBarrier.type || newBarrier.category || 'stairs').toLowerCase();
+    const typeLabel = newBarrier.typeLabel || (rawType === 'stairs' ? 'Pedestrian Stairs' : rawType === 'broken_ramp' ? 'Damaged Ramp' : 'Hazard Obstacle');
+    const severity = (newBarrier.severity || 'high').toLowerCase();
+    const severityLabel = `${severity.toUpperCase()} Severity Barrier`;
+    const title = newBarrier.title || 'Integration Test Stairs';
+    const description = newBarrier.description || (rawType === 'stairs' ? 'Stairs blocking accessible path' : 'Obstacle blocking accessible path');
+
+    const blockagePayload = {
+      type: rawType,
+      title: title,
+      description: description,
+      latitude: lat,
+      longitude: lng,
+      severity: severity
+    };
+
+    let backendId = null;
+
+    try {
+      // Step 1: POST /api/blockages to Dev1
+      const response = await reportBlockage(blockagePayload);
+      console.log('[RAASTA] Dev1 saved blockage response:', response);
+
+      // Step 2: Use the real ID returned from POST /api/blockages
+      backendId = response?.id ?? response?.blockage?.id ?? response?.data?.id ?? response?.blockage_id ?? response?._id;
+    } catch (err) {
+      console.error('[RAASTA] Failed to save blockage in Dev1:', err);
+      setApiError('Unable to connect to RAASTA server. Please try again.');
+      showVisualToast({
+        title: 'Report Failed',
+        subtitle: 'Unable to connect to RAASTA server. Please try again.',
+        type: 'error'
+      });
+      throw err;
+    }
+
+    const officialBarrier = {
+      id: backendId || `dev1-blockage-${lat.toFixed(4)}-${lng.toFixed(4)}`,
+      title: title,
+      type: rawType,
+      typeLabel: typeLabel,
+      severity: severity,
+      severityLabel: severityLabel,
+      locationName: newBarrier.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+      coordinates: { lat, lng },
       reportedAt: 'Just Now',
-      verificationStatus: 'AI Verified (96% Confidence)',
+      verificationStatus: 'Verified by Dev1 Backend',
       decayStatus: 'Fresh',
-      description: newBarrier.description || 'Reported via mobile camera AI scan.',
+      description: description,
       imageUrl: newBarrier.imageUrl,
       isOnRouteA: false,
       isOnRouteB: true
     };
 
-    // Call backend API (if available)
-    await reportBlockage(barrierObj);
+    setBarriers(prev => [officialBarrier, ...prev.filter(b => b.id !== officialBarrier.id)]);
 
-    setBarriers(prev => [barrierObj, ...prev]);
-
-    // Dynamic Route Recalculation
-    setRoutes(prev => ({
-      ...prev,
-      accessible: {
-        ...prev.accessible,
-        durationMinutes: 10,
-        distanceMeters: 620,
-        accessibilityScore: 92,
-        summary: `Dynamic Reroute: Bypassing newly reported "${barrierObj.title}" via East Promenade.`,
-        barriers: [{ name: barrierObj.title, type: barrierObj.type, severity: barrierObj.severity }]
-      }
-    }));
+    // Step 3: Recalculate route via POST /api/routes/calculate
+    // Flow: User reports blockage -> POST /api/blockages -> Dev1 saves it -> POST /api/routes/calculate -> Backend sees new blockage -> Alternative route -> Map updates
+    try {
+      await requestRouteCalculation(destination, selectedProfileId);
+    } catch (routeErr) {
+      console.error('[RAASTA] Recalculating route after blockage report failed:', routeErr);
+    }
 
     showVisualToast({
-      title: 'Barrier Uploaded & Rerouted!',
-      subtitle: `AI classified as ${barrierObj.title}. Route B adapted.`,
+      title: 'Blockage Reported & Route Recalculated!',
+      subtitle: `Registered in Dev1. Alternative route displayed.`,
       type: 'success'
     });
+
+    return officialBarrier;
   };
 
   // Navigation simulation loop
