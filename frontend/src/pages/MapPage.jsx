@@ -23,6 +23,24 @@ import {
   Search
 } from 'lucide-react';
 
+// Leaflet Map Resizer to ensure tiles render immediately when tab switches
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => {
+    map.invalidateSize();
+    const t1 = setTimeout(() => map.invalidateSize(), 150);
+    const t2 = setTimeout(() => map.invalidateSize(), 600);
+    const onResize = () => map.invalidateSize();
+    window.addEventListener('resize', onResize);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [map]);
+  return null;
+}
+
 // Dynamically fit map bounds to route & markers
 function MapBoundsUpdater({ originCoords, destCoords, accessibleCoords, directCoords, barrierList }) {
   const map = useMap();
@@ -66,7 +84,7 @@ function MapBoundsUpdater({ originCoords, destCoords, accessibleCoords, directCo
     if (points.length > 0) {
       try {
         const bounds = L.latLngBounds(points);
-        map.fitBounds(bounds, { padding: [45, 45], maxZoom: 17, animate: true });
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17, animate: true });
       } catch (e) {
         console.warn('[Map] Fit bounds warning:', e);
       }
@@ -171,10 +189,10 @@ export default function MapPage() {
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col flex-1 overflow-hidden bg-slate-950 font-sans">
+    <div className="relative w-full h-[calc(100vh-130px)] min-h-[520px] flex flex-col overflow-hidden bg-slate-950 font-sans">
       
       {/* 1. Clean App Header with Profile Toggle (Wheelchair / Deaf) */}
-      <header className="p-3 bg-slate-900/95 border-b border-slate-800 z-[1000] flex items-center justify-between">
+      <header className="p-3 bg-slate-900/95 border-b border-slate-800 z-[1000] flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white text-sm font-black">
             R
@@ -225,7 +243,7 @@ export default function MapPage() {
       </header>
 
       {/* 2. Destination Selector Bar */}
-      <div className="p-2.5 bg-slate-900/90 border-b border-slate-800 z-[999] relative">
+      <div className="p-2.5 bg-slate-900/90 border-b border-slate-800 z-[999] relative flex-shrink-0">
         <div className="relative">
           <button
             onClick={() => setDestPickerOpen(!destPickerOpen)}
@@ -264,20 +282,25 @@ export default function MapPage() {
         </div>
       </div>
 
-      {/* 3. Real Leaflet Map (Centerpiece) */}
-      <div className="w-full flex-1 relative bg-slate-950 z-0">
+      {/* 3. Real OpenStreetMap Leaflet Map (Centerpiece) */}
+      <div className="w-full flex-1 relative bg-slate-900 z-0 min-h-[300px]">
         <MapContainer
           center={[startLat, startLng]}
           zoom={16}
           scrollWheelZoom={true}
-          zoomControl={false}
+          zoomControl={true}
+          style={{ width: '100%', height: '100%', minHeight: '300px' }}
           className="w-full h-full"
         >
-          {/* Base OpenStreetMap Tile Layer */}
+          {/* Real OpenStreetMap Tile Layer */}
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
           />
+
+          {/* Map resizer to ensure tiles render immediately */}
+          <MapResizer />
 
           {/* Dynamic Auto Bounds to fit start, destination, and calculated routes */}
           <MapBoundsUpdater 

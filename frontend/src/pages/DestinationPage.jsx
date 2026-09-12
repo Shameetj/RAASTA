@@ -232,30 +232,30 @@ export default function DestinationPage() {
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center flex-shrink-0">
                     {getCategoryIcon(dest.category)}
                   </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white">{dest.name}</h3>
-                    <p className="text-[11px] text-slate-300 mt-0.5">{dest.subtitle}</p>
-                    
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {dest.accessibilityFeatures.slice(0, 2).map((feat, idx) => (
-                        <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-emerald-300 border border-slate-700 flex items-center gap-1">
-                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
-                          {feat}
-                        </span>
-                      ))}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xs font-bold text-white truncate">{dest.name}</h3>
+                    <p className="text-[11px] text-slate-300 mt-0.5 truncate">{dest.subtitle || dest.address}</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+                        {dest.category}
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-medium">
+                        ✓ Step-Free Hub
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="text-right flex-shrink-0">
-                  <div className="text-xs font-black text-emerald-400 font-display">
-                    {dest.accessibilityRating}/100
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{dest.distanceFromOrigin}</div>
+                  <span className={`text-[11px] font-bold px-2 py-1 rounded-xl border ${
+                    isSelected ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-900 text-slate-400 border-slate-800'
+                  }`}>
+                    {isSelected ? 'Selected' : 'Select'}
+                  </span>
                 </div>
               </div>
             </div>
