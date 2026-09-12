@@ -41,6 +41,23 @@ export async function fetchBlockages() {
 }
 
 export async function calculateRoute({ start, destination, profile }) {
+  const startLat = typeof start === 'object' ? Number(start.latitude ?? start.lat) : Number(start);
+  const startLng = typeof start === 'object' ? Number(start.longitude ?? start.lng) : Number(start);
+  const destLat = typeof destination === 'object' ? Number(destination.latitude ?? destination.lat) : Number(destination);
+  const destLng = typeof destination === 'object' ? Number(destination.longitude ?? destination.lng) : Number(destination);
+
+  const payload = {
+    start: {
+      latitude: startLat,
+      longitude: startLng
+    },
+    destination: {
+      latitude: destLat,
+      longitude: destLng
+    },
+    profile: profile === 'deaf' ? 'deaf' : 'wheelchair'
+  };
+
   try {
     const res = await fetch(`${BASE_URL}/routes/calculate`, {
       method: 'POST',
@@ -48,8 +65,8 @@ export async function calculateRoute({ start, destination, profile }) {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ start, destination, profile }),
-      signal: AbortSignal.timeout(5000)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(6000)
     });
     if (!res.ok) {
       throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);

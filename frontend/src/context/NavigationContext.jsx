@@ -84,22 +84,28 @@ export function NavigationProvider({ children }) {
   const requestRouteCalculation = async (targetDest = destination, profileId = selectedProfileId) => {
     setIsCalculatingRoute(true);
     try {
+      const startLat = origin.coordinates?.lat ?? 28.6315;
+      const startLng = origin.coordinates?.lng ?? 77.2167;
+      const destLat = targetDest.coordinates?.lat ?? 28.6358;
+      const destLng = targetDest.coordinates?.lng ?? 77.2215;
+
       const result = await calculateRoute({
-        start: { lat: origin.coordinates.lat, lng: origin.coordinates.lng, name: origin.name },
-        destination: { lat: targetDest.coordinates.lat, lng: targetDest.coordinates.lng, name: targetDest.name },
-        profile: profileId
+        start: { latitude: Number(startLat), longitude: Number(startLng) },
+        destination: { latitude: Number(destLat), longitude: Number(destLng) },
+        profile: profileId === 'deaf' ? 'deaf' : 'wheelchair'
       });
 
       if (result) {
-        console.log('[RAASTA] Received calculated route from backend Dev2:', result);
+        console.log('[RAASTA] Received calculated route from backend:', result);
         setApiError(null);
 
-        // 1. Extract backend accessible coordinates (Backend -> coordinates -> Leaflet Polyline)
+        // 1. Extract backend accessible / rerouted coordinates (Backend -> coordinates -> Leaflet Polyline)
         const backendAccessibleCoords = extractBackendRouteCoordinates(
+          result.route?.coordinates ||
+          result.route ||
           result.alternative_route || 
           result.accessible_route || 
           result.safe_route || 
-          result.route || 
           (result.coordinates ? result : null) ||
           (result.routes && result.routes[0] ? result.routes[0] : null)
         );
@@ -111,7 +117,13 @@ export function NavigationProvider({ children }) {
           (result.routes && result.routes[1] ? result.routes[1] : null)
         );
 
-        // 3. Extract path sequence nodes & blockage details
+        // 3. Extract metrics
+        const distanceMeters = result.route?.distance_meters ?? result.distance_meters ?? result.alternative_route?.distance_meters ?? 620;
+        const durationSeconds = result.route?.duration_seconds ?? (result.duration_minutes ? result.duration_minutes * 60 : 540);
+        const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
+        const isRerouted = result.rerouted ?? (result.alternative_route ? true : true);
+
+        // 4. Extract path sequence nodes & blockage details
         const altPathNodes = result.alternative_route?.path_nodes || 
           result.alternative_route?.nodes || 
           result.path_nodes || 
@@ -133,10 +145,10 @@ export function NavigationProvider({ children }) {
           fastest: {
             ...prev.fastest,
             name: result.direct_route?.name || prev.fastest.name,
-            durationMinutes: result.direct_route?.duration_minutes ?? prev.fastest.durationMinutes,
-            distanceMeters: result.direct_route?.distance_meters ?? prev.fastest.distanceMeters,
-            accessibilityScore: result.direct_route?.accessibility_score ?? (result.direct_route?.is_blocked ? 32 : 80),
-            isBlocked: result.direct_route?.is_blocked ?? true,
+            durationMinutes: result.direct_route?.duration_minutes ?? Math.max(1, Math.round(durationMinutes * 0.7)),
+            distanceMeters: result.direct_route?.distance_meters ?? Math.round(distanceMeters * 0.85),
+            accessibilityScore: result.direct_route?.accessibility_score ?? (result.direct_route?.is_blocked ? 32 : (isRerouted ? 32 : 80)),
+            isBlocked: result.direct_route?.is_blocked ?? isRerouted,
             blockedReason: bypassedBlockage,
             pathNodes: Array.isArray(directPathNodes) ? directPathNodes : prev.fastest.pathNodes,
             pathSummary: Array.isArray(directPathNodes) ? directPathNodes.join(' ➔ ') : 'A ➔ B ➔ C (Blocked)',
@@ -151,12 +163,12 @@ export function NavigationProvider({ children }) {
           },
           accessible: {
             ...prev.accessible,
-            name: result.alternative_route?.name || 'Alternative Step-Free Route (A ➔ D ➔ C)',
-            durationMinutes: result.alternative_route?.duration_minutes ?? result.duration_minutes ?? prev.accessible.durationMinutes,
-            distanceMeters: result.alternative_route?.distance_meters ?? result.distance_meters ?? prev.accessible.distanceMeters,
+            name: result.alternative_route?.name || (isRerouted ? 'Alternative Step-Free Detour (A ➔ D ➔ C)' : 'Verified Step-Free Route'),
+            durationMinutes: durationMinutes,
+            distanceMeters: distanceMeters,
             accessibilityScore: result.accessibility_score?.score ?? result.alternative_route?.accessibility_score ?? 94,
             scoreRating: result.accessibility_score?.grade ?? 'Safe & Wheelchair Accessible',
-            isAlternativeRoute: true,
+            isAlternativeRoute: isRerouted,
             bypassedBlockage: bypassedBlockage,
             pathNodes: Array.isArray(altPathNodes) ? altPathNodes : prev.accessible.pathNodes,
             pathSummary: Array.isArray(altPathNodes) ? altPathNodes.join(' ➔ ') : 'A ➔ D ➔ C (Safe Detour)',
@@ -166,7 +178,7 @@ export function NavigationProvider({ children }) {
               coordinates: { lat: 28.6338, lng: 77.2180 },
               badge: 'Step-Free Detour via D ♿'
             },
-            summary: result.alternative_route?.summary || `Alternative detour route (A ➔ D ➔ C) bypassing ${bypassedBlockage} via West Promenade Ramp (D).`,
+            summary: result.message || result.alternative_route?.summary || `Alternative detour route (A ➔ D ➔ C) bypassing ${bypassedBlockage} via West Promenade Ramp (D).`,
             segments: (result.turn_by_turn || result.segments || result.steps)?.map(t => ({
               text: t.instruction || t.text || t.description,
               distance: t.distance || '100m',
@@ -177,15 +189,37 @@ export function NavigationProvider({ children }) {
           }
         }));
 
-        if (result.visual_alerts && Array.isArray(result.visual_alerts) && result.visual_alerts.length > 0) {
-          setDeafAlerts(result.visual_alerts.map((a, i) => ({
+        // Parse Backend Alerts
+        const alertsList = result.alerts || result.visual_alerts;
+        if (alertsList && Array.isArray(alertsList) && alertsList.length > 0) {
+          setDeafAlerts(alertsList.map((a, i) => ({
             id: `alert-backend-${i}`,
-            title: a.title || 'Navigation Alert',
-            subtitle: a.message || a.subtitle || '',
-            type: a.level === 'warning' || a.level === 'danger' ? 'hazard' : 'nav_cue',
-            severity: a.level || 'info',
+            title: typeof a === 'string' ? a : (a.title || 'Navigation Alert'),
+            subtitle: typeof a === 'string' ? 'Real-time Route Guidance' : (a.message || a.subtitle || ''),
+            type: typeof a === 'object' && (a.level === 'warning' || a.level === 'danger') ? 'hazard' : 'nav_cue',
+            severity: (typeof a === 'object' && a.level) || 'info',
             timestamp: 'Real-time'
           })));
+        }
+
+        // Parse Backend Blockages
+        if (result.blockages && Array.isArray(result.blockages) && result.blockages.length > 0) {
+          const parsedBlockages = result.blockages.map((b, i) => ({
+            id: b.id || `barr-backend-${i}`,
+            title: b.title || b.name || 'Reported Obstacle',
+            type: b.type || 'stairs',
+            typeLabel: b.type === 'stairs' ? '18 Pedestrian Stairs' : 'Obstacle',
+            severity: b.severity || 'high',
+            locationName: b.location_name || b.locationName || 'Point B Hazard Corridor',
+            coordinates: b.coordinates || { lat: b.latitude || 28.6335, lng: b.longitude || 77.2190 },
+            reportedAt: 'Verified',
+            verificationStatus: 'Verified by Backend',
+            decayStatus: 'Active',
+            description: b.description || 'Blockage bypassed by alternative route.',
+            isOnRouteA: true,
+            isOnRouteB: false
+          }));
+          setBarriers(parsedBlockages);
         }
 
         return result;
