@@ -12,9 +12,8 @@ from .schemas import RouteCalculateRequest
 
 DEV2_ROUTING_URL = os.getenv(
     "DEV2_ROUTING_URL",
-    "http://26.228.125.133:8001/route",
+    "http://127.0.0.1:8001/route",
 )
-
 
 router = APIRouter(
     prefix="/api/routes",
@@ -65,7 +64,7 @@ def calculate_route_endpoint(
                 "profile": request.profile,
                 "active_blockages": active_blockages,
             },
-            timeout=30,
+            timeout=60,
         )
 
         # If Developer 2 returns an HTTP error, forward a useful message.
