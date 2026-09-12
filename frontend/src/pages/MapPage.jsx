@@ -118,15 +118,17 @@ export default function MapPage() {
 
   // Icons
   const startIcon = createDivIcon(
-    `<div class="w-8 h-8 rounded-full bg-emerald-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold ring-4 ring-emerald-500/30 animate-pulse">
-      🚇
-    </div>`
+    `<div class="inline-flex items-center gap-1 bg-emerald-600 border-2 border-white text-white px-2.5 py-1 rounded-full shadow-xl font-bold text-xs whitespace-nowrap ring-4 ring-emerald-500/40 animate-pulse">
+      <span>📍 Start</span>
+    </div>`,
+    [76, 28]
   );
 
   const destIcon = createDivIcon(
-    `<div class="w-8 h-8 rounded-full bg-cyan-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold ring-4 ring-cyan-500/30">
-      🏛️
-    </div>`
+    `<div class="inline-flex items-center gap-1 bg-cyan-600 border-2 border-white text-white px-2.5 py-1 rounded-full shadow-xl font-bold text-xs whitespace-nowrap ring-4 ring-cyan-500/40">
+      <span>🏁 Destination</span>
+    </div>`,
+    [102, 28]
   );
 
   const obstacleIcon = createDivIcon(
@@ -300,12 +302,13 @@ export default function MapPage() {
           )}
 
           {/* Start Origin Marker */}
-          <Marker position={[startLat, startLng]} icon={startIcon}>
+          <Marker position={[origin.coordinates?.lat || startLat, origin.coordinates?.lng || startLng]} icon={startIcon}>
             <Popup>
               <div className="space-y-1">
-                <div className="text-[10px] font-bold uppercase text-emerald-400">Start Location</div>
+                <div className="text-[10px] font-bold uppercase text-emerald-400">📍 Start Location</div>
                 <div className="text-xs font-bold text-white">{origin.name}</div>
-                <div className="text-[10px] text-slate-300">Verified Level-0 Ground Access</div>
+                <div className="text-[10px] text-slate-300">GPS: {origin.coordinates?.lat || startLat}, {origin.coordinates?.lng || startLng}</div>
+                <div className="text-[10px] text-emerald-300 font-semibold">{origin.address || 'Verified Step-Free Origin'}</div>
               </div>
             </Popup>
           </Marker>
