@@ -46,25 +46,27 @@ export default function RouteResultsPage() {
         </p>
       </div>
 
-      {/* Profile Persona Quick Switcher Chips */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-        {['wheelchair', 'deaf', 'blind', 'elderly'].map((pid) => {
-          const isSelected = selectedProfileId === pid;
-          const label = pid === 'wheelchair' ? 'Wheelchair ♿' : pid === 'deaf' ? 'Deaf 🦻' : pid === 'blind' ? 'Low Vision 👁️' : 'Senior 🦽';
+      {/* Profile Persona Quick Switcher Chips (MVP: Wheelchair / Deaf) */}
+      <div className="flex items-center gap-2 pb-1">
+        {[
+          { id: 'wheelchair', label: 'Wheelchair ♿' },
+          { id: 'deaf', label: 'Deaf / Hard of Hearing 🦻' }
+        ].map((p) => {
+          const isSelected = selectedProfileId === p.id;
           return (
             <button
-              key={pid}
+              key={p.id}
               onClick={() => {
-                handleSelectProfile(pid);
+                handleSelectProfile(p.id);
                 triggerHaptic([40, 20]);
               }}
-              className={`px-3 py-1 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all touch-active ${
+              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all touch-active ${
                 isSelected
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-emerald-600 text-white shadow-sm font-bold'
                   : 'bg-[#131b2e] text-slate-300 border border-slate-800'
               }`}
             >
-              {label}
+              {p.label}
             </button>
           );
         })}
@@ -263,7 +265,7 @@ export default function RouteResultsPage() {
       {/* ========================================================================= */}
       {/* CONDITIONAL FEATURE 1: WHEELCHAIR ♿ ACCOMMODATIONS                         */}
       {/* ========================================================================= */}
-      {(selectedProfileId === 'wheelchair' || true) && (
+      {selectedProfileId === 'wheelchair' && (
         <div className="p-4 rounded-3xl bg-[#131b2e] border border-emerald-500/40 space-y-3 shadow-md">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <div className="flex items-center gap-2">
@@ -326,7 +328,7 @@ export default function RouteResultsPage() {
       {/* ========================================================================= */}
       {/* CONDITIONAL FEATURE 2: DEAF 🦻 ACCOMMODATIONS                              */}
       {/* ========================================================================= */}
-      {(selectedProfileId === 'deaf' || true) && (
+      {selectedProfileId === 'deaf' && (
         <div className="p-4 rounded-3xl bg-[#131b2e] border border-cyan-500/40 space-y-3 shadow-md">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <div className="flex items-center gap-2">

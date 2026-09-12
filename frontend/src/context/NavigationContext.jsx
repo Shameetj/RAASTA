@@ -5,7 +5,6 @@ import {
   INITIAL_ORIGIN,
   INITIAL_BARRIERS,
   INITIAL_ACCESSIBLE_FEATURES,
-  MOCK_ROUTES_DATA,
   DEAF_MODE_ALERTS
 } from '../data/mockData';
 import { fetchLocations, fetchBlockages, calculateRoute, reportBlockage } from '../api/apiClient';
@@ -46,7 +45,7 @@ const INITIAL_ROUTES_STATE = {
 };
 
 export function NavigationProvider({ children }) {
-  const [currentStep, setCurrentStep] = useState('home'); // 'home' | 'profile' | 'destination' | 'map' | 'results' | 'report'
+  const [currentStep, setCurrentStep] = useState('map'); // 'map' | 'destination' | 'report' | 'results' | 'profile'
   const [selectedProfileId, setSelectedProfileId] = useState('wheelchair');
   const [preferences, setPreferences] = useState(ACCESSIBILITY_PROFILES[0].defaultPreferences);
   
@@ -58,7 +57,7 @@ export function NavigationProvider({ children }) {
   const [routes, setRoutes] = useState(INITIAL_ROUTES_STATE);
   
   const [isHighContrast, setIsHighContrast] = useState(false);
-  const [isMobileFrameView, setIsMobileFrameView] = useState(true); // Default to realistic mobile frame for showcase
+  const [isMobileFrameView, setIsMobileFrameView] = useState(true);
   const [isNavSimulating, setIsNavSimulating] = useState(false);
   const [currentSimSegment, setCurrentSimSegment] = useState(0);
   
@@ -73,70 +72,14 @@ export function NavigationProvider({ children }) {
   const [apiError, setApiError] = useState(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
 
-  // Fetch dynamic backend data on mount
-  useEffect(() => {
-    async function loadBackendData() {
-      try {
-        const blocks = await fetchBlockages();
-        if (blocks && Array.isArray(blocks) && blocks.length > 0) {
-          console.log('[RAASTA] Received real blockages from backend:', blocks);
-          // Normalize backend fields for each blockage
-          const normalized = blocks.map((b, idx) => {
-            const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
-            const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
-            const rawType = (b.type || 'stairs').toLowerCase();
-            const typeLabel = rawType === 'stairs' ? 'Stairs' : 
-                              rawType === 'broken_ramp' ? 'Broken Ramp' : 
-                              rawType === 'construction' ? 'Construction' :
-                              (rawType.charAt(0).toUpperCase() + rawType.slice(1));
-            const severity = (b.severity || 'high').toLowerCase();
-            const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
-            const description = b.description || (rawType === 'stairs' ? 'Stairs blocking sidewalk' : `${typeLabel} blocking sidewalk`);
-
-            return {
-              id: b.id || `barr-${idx}-${lat}-${lng}`,
-              title: b.title || typeLabel,
-              type: rawType,
-              typeLabel: typeLabel,
-              severity: severity,
-              severityLabel: severityLabel,
-              locationName: b.location_name || b.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
-              coordinates: { lat, lng },
-              reportedAt: b.reported_at || b.reportedAt || 'Verified by Backend',
-              verificationStatus: 'Verified by Backend',
-              decayStatus: 'Active',
-              description: description,
-              isOnRouteA: true,
-              isOnRouteB: false
-            };
-          }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
-
-          if (normalized.length > 0) {
-            setBarriers(normalized);
-          }
-          setApiError(null);
-        }
-      } catch (err) {
-        console.error('[RAASTA] Backend connection failed:', err);
-        setApiError('Unable to connect to RAASTA server. Please try again.');
-        showVisualToast({
-          title: 'Backend Connection Error',
-          subtitle: 'Unable to connect to RAASTA server. Please try again.',
-          type: 'error'
-        });
-      }
-    }
-    loadBackendData();
-  }, []);
-
   // Calculate route using Dev2 endpoint when destination/profile changes
   const requestRouteCalculation = async (targetDest = destination, profileId = selectedProfileId) => {
     setIsCalculatingRoute(true);
     try {
-      const startLat = origin.coordinates?.lat ?? 28.6315;
-      const startLng = origin.coordinates?.lng ?? 77.2167;
-      const destLat = targetDest.coordinates?.lat ?? 28.6358;
-      const destLng = targetDest.coordinates?.lng ?? 77.2215;
+      const startLat = origin.coordinates?.lat ?? 15.4910;
+      const startLng = origin.coordinates?.lng ?? 73.8260;
+      const destLat = targetDest.coordinates?.lat ?? 15.4950;
+      const destLng = targetDest.coordinates?.lng ?? 73.8310;
 
       const result = await calculateRoute({
         start: { latitude: Number(startLat), longitude: Number(startLng) },
@@ -275,11 +218,66 @@ export function NavigationProvider({ children }) {
     }
   };
 
+  // Fetch dynamic blockages and calculate initial route on mount
+  useEffect(() => {
+    async function initData() {
+      try {
+        const blocks = await fetchBlockages();
+        if (blocks && Array.isArray(blocks) && blocks.length > 0) {
+          const normalized = blocks.map((b, idx) => {
+            const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
+            const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
+            const rawType = (b.type || 'stairs').toLowerCase();
+            const typeLabel = rawType === 'stairs' ? 'Stairs' : 
+                              rawType === 'broken_ramp' ? 'Broken Ramp' : 
+                              (rawType.charAt(0).toUpperCase() + rawType.slice(1));
+            const severity = (b.severity || 'high').toLowerCase();
+            const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
+            const description = b.description || `${typeLabel} blocking sidewalk`;
+
+            return {
+              id: b.id || `barr-${idx}-${lat}-${lng}`,
+              title: b.title || typeLabel,
+              type: rawType,
+              typeLabel: typeLabel,
+              severity: severity,
+              severityLabel: severityLabel,
+              locationName: b.location_name || b.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+              coordinates: { lat, lng },
+              reportedAt: b.reported_at || b.reportedAt || 'Verified by Backend',
+              verificationStatus: 'Verified by Backend',
+              decayStatus: 'Active',
+              description: description,
+              isOnRouteA: true,
+              isOnRouteB: false
+            };
+          }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
+
+          if (normalized.length > 0) {
+            setBarriers(normalized);
+          }
+        }
+      } catch (err) {
+        console.warn('[RAASTA] Blockages fetch warning:', err);
+      }
+
+      try {
+        await requestRouteCalculation(destination, selectedProfileId);
+      } catch (err) {
+        console.warn('[RAASTA] Initial route calculation warning:', err);
+      }
+    }
+    initData();
+  }, []);
+
   const handleSelectProfile = (profileId) => {
     setSelectedProfileId(profileId);
     const prof = ACCESSIBILITY_PROFILES.find(p => p.id === profileId);
     if (prof) {
       setPreferences(prof.defaultPreferences);
+    }
+    if (profileId === 'deaf') {
+      triggerHaptic([200, 100, 200]);
     }
     requestRouteCalculation(destination, profileId);
   };
