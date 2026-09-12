@@ -32,17 +32,29 @@ export default function VisualAlertBanner() {
         </div>
       )}
 
-      {/* 2. Top Visual Alert Banner (Deaf / Universal Toast) */}
+      {/* 2. Top Visual Alert Banner (Deaf / Universal Toast / API Errors) */}
       {activeToast && (
-        <div className="absolute top-14 left-3 right-3 z-40 p-3 rounded-2xl bg-slate-950/95 backdrop-blur-xl border-2 border-cyan-400 shadow-2xl flex items-start gap-2.5 animate-slide-up">
-          <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-300 flex-shrink-0 text-sm font-bold">
-            {activeToast.type === 'success' ? '✓' : '🦻'}
+        <div className={`absolute top-14 left-3 right-3 z-40 p-3 rounded-2xl backdrop-blur-xl border-2 shadow-2xl flex items-start gap-2.5 animate-slide-up ${
+          activeToast.type === 'error'
+            ? 'bg-rose-950/95 border-rose-500 text-rose-100'
+            : activeToast.type === 'success'
+            ? 'bg-emerald-950/95 border-emerald-400 text-emerald-100'
+            : 'bg-slate-950/95 border-cyan-400 text-slate-100'
+        }`}>
+          <div className={`w-8 h-8 rounded-xl border flex items-center justify-center flex-shrink-0 text-sm font-bold ${
+            activeToast.type === 'error'
+              ? 'bg-rose-500/20 border-rose-400 text-rose-300'
+              : activeToast.type === 'success'
+              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+              : 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+          }`}>
+            {activeToast.type === 'error' ? '⚠️' : activeToast.type === 'success' ? '✓' : '🦻'}
           </div>
-          <div className="flex-1">
-            <h4 className="text-xs font-bold text-white leading-tight">
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs font-bold leading-tight">
               {activeToast.title}
             </h4>
-            <p className="text-[11px] text-slate-300 mt-0.5 leading-snug">
+            <p className="text-[11px] opacity-90 mt-0.5 leading-snug">
               {activeToast.subtitle}
             </p>
           </div>

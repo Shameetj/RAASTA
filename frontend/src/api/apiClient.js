@@ -1,67 +1,99 @@
 /**
  * RAASTA Mobile API Client
- * Connects to Backend API (`http://localhost:8000/api`) with resilient offline fallback
+ * Real Backend Connection & Strict Error Handling
  */
 
 const BASE_URL =
   import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
+const SERVER_ERROR_MESSAGE = 'Unable to connect to RAASTA server. Please try again.';
+
 export async function fetchLocations() {
   try {
-    const res = await fetch(`${BASE_URL}/locations`, { signal: AbortSignal.timeout(1500) });
-    if (res.ok) return await res.json();
+    const res = await fetch(`${BASE_URL}/locations`, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+    }
+    return await res.json();
   } catch (err) {
-    console.warn('[API] Using offline fallback for locations');
+    console.error('[API Error] GET /locations failed:', err);
+    throw new Error(SERVER_ERROR_MESSAGE);
   }
-  return null; // Signals fallback to local data
 }
 
 export async function fetchBlockages() {
   try {
-    const res = await fetch(`${BASE_URL}/blockages`, { signal: AbortSignal.timeout(1500) });
-    if (res.ok) return await res.json();
+    const res = await fetch(`${BASE_URL}/blockages`, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+    }
+    return await res.json();
   } catch (err) {
-    console.warn('[API] Using offline fallback for blockages');
+    console.error('[API Error] GET /blockages failed:', err);
+    throw new Error(SERVER_ERROR_MESSAGE);
   }
-  return null;
 }
 
 export async function calculateRoute({ start, destination, profile }) {
   try {
     const res = await fetch(`${BASE_URL}/routes/calculate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ start, destination, profile }),
-      signal: AbortSignal.timeout(2000)
+      signal: AbortSignal.timeout(5000)
     });
-    if (res.ok) return await res.json();
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+    }
+    return await res.json();
   } catch (err) {
-    console.warn('[API] Using offline fallback for route calculation');
+    console.error('[API Error] POST /routes/calculate failed:', err);
+    throw new Error(SERVER_ERROR_MESSAGE);
   }
-  return null;
 }
 
 export async function reportBlockage(blockageData) {
   try {
     const res = await fetch(`${BASE_URL}/blockages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify(blockageData),
-      signal: AbortSignal.timeout(2000)
+      signal: AbortSignal.timeout(4000)
     });
-    if (res.ok) return await res.json();
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+    }
+    return await res.json();
   } catch (err) {
-    console.warn('[API] Using local state for barrier report');
+    console.error('[API Error] POST /blockages failed:', err);
+    throw new Error(SERVER_ERROR_MESSAGE);
   }
-  return { success: true, id: `barr-${Date.now()}`, ...blockageData };
 }
 
 export async function resetDemoData() {
   try {
-    const res = await fetch(`${BASE_URL}/demo/reset`, { method: 'POST', signal: AbortSignal.timeout(1500) });
-    if (res.ok) return await res.json();
+    const res = await fetch(`${BASE_URL}/demo/reset`, { 
+      method: 'POST', 
+      signal: AbortSignal.timeout(3000) 
+    });
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP ${res.status}: ${res.statusText}`);
+    }
+    return await res.json();
   } catch (err) {
-    console.warn('[API] Local reset active');
+    console.error('[API Error] POST /demo/reset failed:', err);
+    throw new Error(SERVER_ERROR_MESSAGE);
   }
-  return { success: true };
 }

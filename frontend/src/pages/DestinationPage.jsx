@@ -15,7 +15,9 @@ import {
   CheckCircle2,
   Route,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 
 export default function DestinationPage() {
@@ -27,7 +29,9 @@ export default function DestinationPage() {
     selectedProfile,
     triggerHaptic,
     showVisualToast,
-    requestRouteCalculation
+    requestRouteCalculation,
+    apiError,
+    setApiError
   } = useNavigation();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,6 +77,7 @@ export default function DestinationPage() {
 
   const handleShowAccessibleRoutes = async () => {
     setIsLoadingRoutes(true);
+    setApiError(null);
     triggerHaptic([40, 20]);
     
     try {
@@ -86,19 +91,14 @@ export default function DestinationPage() {
           subtitle: `Optimal step-free path to ${destination.name} ready.`,
           type: 'success'
         });
-      } else {
-        showVisualToast({
-          title: `Route to ${destination.name}`,
-          subtitle: 'Step-free accessible path ready.',
-          type: 'info'
-        });
+        // 3. Open map ONLY on verified success
+        setCurrentStep('map');
       }
     } catch (err) {
-      console.warn('[RAASTA] Error calculating route:', err);
+      console.error('[RAASTA] Error calculating route:', err);
+      // Stay on Destination page and display explicit error notice
     } finally {
       setIsLoadingRoutes(false);
-      // 3. Open map
-      setCurrentStep('map');
     }
   };
 
@@ -262,6 +262,33 @@ export default function DestinationPage() {
           );
         })}
       </div>
+
+      {/* API Connection Error Notice */}
+      {apiError && (
+        <div className="p-4 rounded-2xl bg-rose-950/70 border-2 border-rose-500 text-white space-y-3 animate-fade-in shadow-xl">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-rose-600/30 border border-rose-400 text-rose-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-white leading-tight">
+                Unable to connect to RAASTA server.
+              </h4>
+              <p className="text-[11px] text-rose-200/90 mt-0.5 leading-snug">
+                Please try again.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleShowAccessibleRoutes}
+            className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      )}
 
       {/* CTA Button */}
       <button

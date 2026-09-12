@@ -37,35 +37,47 @@ export function NavigationProvider({ children }) {
 
   const selectedProfile = ACCESSIBILITY_PROFILES.find(p => p.id === selectedProfileId) || ACCESSIBILITY_PROFILES[0];
 
-  // Try fetching dynamic backend data on mount
+  const [apiError, setApiError] = useState(null);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+
+  // Fetch dynamic backend data on mount
   useEffect(() => {
     async function loadBackendData() {
-      const blocks = await fetchBlockages();
-      if (blocks && Array.isArray(blocks) && blocks.length > 0) {
-        console.log('[RAASTA] Received real blockages from backend:', blocks);
-        // Normalize backend fields
-        const normalized = blocks.map((b, idx) => ({
-          id: b.id || `barr-${idx}`,
-          title: b.title || 'Reported Obstacle',
-          type: b.type || 'stairs',
-          typeLabel: b.type === 'stairs' ? 'Pedestrian Stairs' : b.type === 'broken_ramp' ? 'Damaged Ramp' : 'Blocked Sidewalk',
-          severity: b.severity || 'high',
-          locationName: b.location_name || b.locationName || 'Demo Corridor',
-          coordinates: b.coordinates || { lat: b.latitude || 28.6335, lng: b.longitude || 77.2190 },
-          reportedAt: b.reported_at || b.reportedAt || 'Verified',
-          verificationStatus: 'Verified by Backend',
-          decayStatus: 'Active',
-          description: b.description || 'Obstacle loaded from backend database.',
-          isOnRouteA: true,
-          isOnRouteB: false
-        }));
-        setBarriers(normalized);
+      try {
+        const blocks = await fetchBlockages();
+        if (blocks && Array.isArray(blocks) && blocks.length > 0) {
+          console.log('[RAASTA] Received real blockages from backend:', blocks);
+          // Normalize backend fields
+          const normalized = blocks.map((b, idx) => ({
+            id: b.id || `barr-${idx}`,
+            title: b.title || 'Reported Obstacle',
+            type: b.type || 'stairs',
+            typeLabel: b.type === 'stairs' ? 'Pedestrian Stairs' : b.type === 'broken_ramp' ? 'Damaged Ramp' : 'Blocked Sidewalk',
+            severity: b.severity || 'high',
+            locationName: b.location_name || b.locationName || 'Demo Corridor',
+            coordinates: b.coordinates || { lat: b.latitude || 28.6335, lng: b.longitude || 77.2190 },
+            reportedAt: b.reported_at || b.reportedAt || 'Verified',
+            verificationStatus: 'Verified by Backend',
+            decayStatus: 'Active',
+            description: b.description || 'Obstacle loaded from backend database.',
+            isOnRouteA: true,
+            isOnRouteB: false
+          }));
+          setBarriers(normalized);
+          setApiError(null);
+        }
+      } catch (err) {
+        console.error('[RAASTA] Backend connection failed:', err);
+        setApiError('Unable to connect to RAASTA server. Please try again.');
+        showVisualToast({
+          title: 'Backend Connection Error',
+          subtitle: 'Unable to connect to RAASTA server. Please try again.',
+          type: 'error'
+        });
       }
     }
     loadBackendData();
   }, []);
-
-  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
 
   // Calculate route using Dev2 endpoint when destination/profile changes
   const requestRouteCalculation = async (targetDest = destination, profileId = selectedProfileId) => {
@@ -79,6 +91,7 @@ export function NavigationProvider({ children }) {
 
       if (result) {
         console.log('[RAASTA] Received calculated route from backend Dev2:', result);
+        setApiError(null);
         // Map backend route response to frontend structure if returned
         if (result.alternative_route || result.direct_route) {
           setRoutes(prev => ({
@@ -121,11 +134,17 @@ export function NavigationProvider({ children }) {
         return result;
       }
     } catch (e) {
-      console.warn('[RAASTA] Route calculation using verified fallback:', e);
+      console.error('[RAASTA] Route calculation failed:', e);
+      setApiError('Unable to connect to RAASTA server. Please try again.');
+      showVisualToast({
+        title: 'Connection Error',
+        subtitle: 'Unable to connect to RAASTA server. Please try again.',
+        type: 'error'
+      });
+      throw e;
     } finally {
       setIsCalculatingRoute(false);
     }
-    return null;
   };
 
   const handleSelectProfile = (profileId) => {
@@ -265,7 +284,9 @@ export function NavigationProvider({ children }) {
     civicModalOpen,
     setCivicModalOpen,
     requestRouteCalculation,
-    isCalculatingRoute
+    isCalculatingRoute,
+    apiError,
+    setApiError
   };
 
   return (
