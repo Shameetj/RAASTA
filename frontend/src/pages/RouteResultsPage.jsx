@@ -70,143 +70,191 @@ export default function RouteResultsPage() {
         })}
       </div>
 
-      {/* Visual Detour Routing Flowchart (A -> D -> C vs A -> B -> C) */}
-      <div className="p-4 rounded-3xl bg-[#131b2e] border-2 border-emerald-500/60 shadow-lg space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">🔀</span>
-            <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                Detour Path Breakdown
-              </h3>
-              <div className="text-[10px] text-slate-400">Backend Obstacle Detection &amp; Rerouting</div>
+      {/* Backend Alert Notification Section */}
+      {accessible.alerts && accessible.alerts.length > 0 && (
+        <div className="p-4 rounded-3xl bg-amber-950/80 border-2 border-amber-500/80 shadow-lg space-y-2 text-left animate-fade-in">
+          <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+            <span className="text-base">⚠️</span>
+            <span>Blockage detected</span>
+          </div>
+          {accessible.alerts.map((alert, idx) => (
+            <div key={idx} className="text-xs text-white font-medium pl-6 leading-relaxed">
+              {typeof alert === 'string' ? alert : alert.message}
+            </div>
+          ))}
+          {accessible.rerouted && (
+            <div className="text-xs font-bold text-emerald-400 pl-6 pt-1 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>✓ Alternative accessible route found.</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Visual Detour Routing Flowchart (When rerouted) */}
+      {accessible.rerouted && (
+        <div className="p-4 rounded-3xl bg-[#131b2e] border-2 border-emerald-500/60 shadow-lg space-y-3 text-left">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🔀</span>
+              <div>
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Detour Path Breakdown
+                </h3>
+                <div className="text-[10px] text-slate-400">Backend Obstacle Detection &amp; Rerouting</div>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700">
+              Detour Active
+            </span>
+          </div>
+
+          {/* Path Flow 1: Safe Alternative Route */}
+          <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-emerald-400">
+              <span>✔ Alternative Route</span>
+              <span className="text-[10px] text-emerald-300 font-mono">Bypassing Hazard</span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold py-1">
+              <span className="px-2 py-1 rounded-lg bg-emerald-900/80 text-emerald-200 border border-emerald-600 whitespace-nowrap">
+                📍 Start: {origin.name}
+              </span>
+              <span className="text-emerald-400 font-bold">➔</span>
+              <span className="px-2 py-1 rounded-lg bg-emerald-800 text-white border border-emerald-400 font-bold whitespace-nowrap shadow-sm">
+                ♿ Accessible Detour
+              </span>
+              <span className="text-emerald-400 font-bold">➔</span>
+              <span className="px-2 py-1 rounded-lg bg-emerald-900/80 text-emerald-200 border border-emerald-600 whitespace-nowrap">
+                🏁 Destination: {destination.name}
+              </span>
+            </div>
+            <div className="text-[10px] text-emerald-300">
+              Detour calculated around reported blockage.
             </div>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700">
-            A ➔ D ➔ C
-          </span>
-        </div>
 
-        {/* Path Flow 1: Safe Alternative Route (A -> D -> C) */}
-        <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold text-emerald-400">
-            <span>✔ Alternative Route (Safe Detour)</span>
-            <span className="text-[10px] text-emerald-300 font-mono">100% Step-Free</span>
-          </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold py-1">
-            <span className="px-2 py-1 rounded-lg bg-emerald-900/80 text-emerald-200 border border-emerald-600 whitespace-nowrap">
-              📍 A: Start
-            </span>
-            <span className="text-emerald-400 font-bold">➔</span>
-            <span className="px-2 py-1 rounded-lg bg-emerald-800 text-white border border-emerald-400 font-bold whitespace-nowrap shadow-sm">
-              ♿ D: West Promenade Ramp
-            </span>
-            <span className="text-emerald-400 font-bold">➔</span>
-            <span className="px-2 py-1 rounded-lg bg-emerald-900/80 text-emerald-200 border border-emerald-600 whitespace-nowrap">
-              🏁 C: {destination.name}
-            </span>
-          </div>
-          <div className="text-[10px] text-emerald-300">
-            Bypasses 18-step concrete stairs at B via 1:12 gentle ramp.
+          {/* Path Flow 2: Blocked Direct Route */}
+          <div className="p-3 rounded-2xl bg-rose-950/30 border border-rose-900/40 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-rose-400">
+              <span>✖ Direct Path</span>
+              <span className="text-[10px] text-rose-300 font-mono">Blocked 🚫</span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold py-1">
+              <span className="px-2 py-1 rounded-lg bg-slate-900 text-slate-300 border border-slate-700 whitespace-nowrap">
+                📍 Start
+              </span>
+              <span className="text-rose-400 font-bold">➔</span>
+              <span className="px-2 py-1 rounded-lg bg-rose-900 text-white border border-rose-500 font-bold whitespace-nowrap shadow-sm">
+                ⚠️ Blockage
+              </span>
+              <span className="text-rose-400 font-bold">➔</span>
+              <span className="px-2 py-1 rounded-lg bg-slate-900 text-slate-300 border border-slate-700 whitespace-nowrap">
+                🏁 Destination
+              </span>
+            </div>
+            <div className="text-[10px] text-rose-300">
+              Direct path contains stairs / obstacle blocking passage.
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Path Flow 2: Blocked Direct Route (A -> B -> C) */}
-        <div className="p-3 rounded-2xl bg-rose-950/30 border border-rose-900/40 space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold text-rose-400">
-            <span>✖ Direct Path (Blocked at B)</span>
-            <span className="text-[10px] text-rose-300 font-mono">Inaccessible 🚫</span>
-          </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold py-1">
-            <span className="px-2 py-1 rounded-lg bg-slate-900 text-slate-300 border border-slate-700 whitespace-nowrap">
-              📍 A: Start
-            </span>
-            <span className="text-rose-400 font-bold">➔</span>
-            <span className="px-2 py-1 rounded-lg bg-rose-900 text-white border border-rose-500 font-bold whitespace-nowrap shadow-sm">
-              ⚠️ B: 18 Concrete Stairs
-            </span>
-            <span className="text-rose-400 font-bold">➔</span>
-            <span className="px-2 py-1 rounded-lg bg-slate-900 text-slate-300 border border-slate-700 whitespace-nowrap">
-              🏁 C: {destination.name}
-            </span>
-          </div>
-          <div className="text-[10px] text-rose-300">
-            Standard GPS route fails wheelchair accessibility due to 18 steep steps without a ramp.
-          </div>
-        </div>
-      </div>
-
-      {/* Dual Route Result Comparison Cards */}
-      <div className="space-y-3">
+      {/* Route Result Comparison Cards */}
+      <div className="space-y-3 text-left">
         
-        {/* Recommended Route B (Step-Free 94) */}
+        {/* Accessible Route Card */}
         <div className="p-4 rounded-3xl bg-[#131b2e] border-2 border-emerald-500/80 shadow-md space-y-3 relative overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
               <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                Alternative Step-Free Route (A ➔ D ➔ C)
+                {accessible.name || 'Accessible Route'}
               </h3>
             </div>
             <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700">
-              Safe ♿
+              {accessible.rerouted ? 'Alternative Route ♿' : 'Accessible ♿'}
             </span>
           </div>
 
-          <div className="flex items-baseline justify-between p-3 rounded-2xl bg-emerald-950/30 border border-emerald-500/30">
-            <div>
-              <div className="text-3xl font-black text-emerald-400 font-display">
-                {accessible.accessibilityScore}
-                <span className="text-base font-normal text-emerald-600">/100</span>
+          <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 space-y-2">
+            {/* Real Distance */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-300">Distance</span>
+              <span className="text-sm font-bold text-white">
+                {accessible.distanceMeters !== null ? `${accessible.distanceMeters} m` : 'Calculated by Backend'}
+              </span>
+            </div>
+
+            {/* Real Duration (if provided) */}
+            {accessible.durationMinutes !== null && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-300">Estimated Duration</span>
+                <span className="text-xs font-semibold text-white">
+                  {accessible.durationMinutes} min
+                </span>
               </div>
-              <div className="text-[10px] text-emerald-300 font-semibold">{accessible.scoreRating}</div>
+            )}
+
+            {/* Real Status */}
+            <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between">
+              <span className="text-xs text-slate-300">Status</span>
+              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                <span>✓</span>
+                <span>{accessible.rerouted ? 'Alternative route found' : 'Accessible route found'}</span>
+              </span>
             </div>
-            <div className="text-right">
-              <div className="text-sm font-bold text-white">{accessible.durationMinutes} mins • {accessible.distanceMeters} m</div>
-              <div className="text-[10px] text-emerald-400">0 Physical Barriers</div>
-            </div>
+
+            {/* Real Accessibility Score ONLY if provided by backend */}
+            {accessible.score !== null && (
+              <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between">
+                <span className="text-xs text-slate-300">Accessibility Score</span>
+                <span className="text-sm font-bold text-emerald-400">
+                  {accessible.score}/100 {accessible.scoreRating ? `• ${accessible.scoreRating}` : ''}
+                </span>
+              </div>
+            )}
           </div>
 
-          <p className="text-[11px] text-slate-300 leading-snug">
-            {accessible.summary}
-          </p>
+          {accessible.message && (
+            <p className="text-[11px] text-slate-300 leading-snug">
+              {accessible.message}
+            </p>
+          )}
         </div>
 
-        {/* Direct Route A (Contains Steps 32) */}
-        <div className="p-4 rounded-3xl bg-[#131b2e] border border-rose-900/40 shadow-sm space-y-3">
+        {/* Direct Route Card */}
+        <div className="p-4 rounded-3xl bg-[#131b2e] border border-slate-800 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+              <span className={`w-2.5 h-2.5 rounded-full ${fastest.isBlocked ? 'bg-rose-500' : 'bg-slate-400'}`} />
               <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Direct Route (A ➔ B ➔ C - Blocked)
+                Direct Path
               </h3>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-800">
-              Contains Stairs 🚫
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              fastest.isBlocked 
+                ? 'bg-rose-950 text-rose-300 border border-rose-800' 
+                : 'bg-slate-900 text-slate-400 border border-slate-700'
+            }`}>
+              {fastest.isBlocked ? 'Contains Obstacle 🚫' : 'Direct'}
             </span>
           </div>
 
-          <div className="flex items-baseline justify-between p-3 rounded-2xl bg-rose-950/20 border border-rose-800/20">
-            <div>
-              <div className="text-3xl font-black text-rose-400 font-display">
-                {fastest.accessibilityScore}
-                <span className="text-base font-normal text-rose-600">/100</span>
+          <div className="p-3 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
+            {fastest.distanceMeters !== null && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Distance</span>
+                <span className="text-xs font-bold text-slate-200">
+                  {fastest.distanceMeters} m
+                </span>
               </div>
-              <div className="text-[10px] text-rose-300 font-semibold">{fastest.scoreRating}</div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Status</span>
+              <span className={`text-xs font-bold ${fastest.isBlocked ? 'text-rose-400' : 'text-slate-300'}`}>
+                {fastest.isBlocked ? (fastest.blockedReason || 'Blocked by Obstacle') : 'Direct pathway'}
+              </span>
             </div>
-            <div className="text-right">
-              <div className="text-sm font-bold text-white">{fastest.durationMinutes} mins • {fastest.distanceMeters} m</div>
-              <div className="text-[10px] text-rose-400">Blocked by 18 Stairs at B</div>
-            </div>
-          </div>
-
-          <div className="space-y-1 bg-rose-950/20 p-2.5 rounded-xl border border-rose-900/30 text-[11px] text-slate-300">
-            {fastest.barriers.map((b, idx) => (
-              <div key={idx} className="flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-                <span>{b.name}</span>
-              </div>
-            ))}
           </div>
         </div>
 
@@ -224,7 +272,7 @@ export default function RouteResultsPage() {
                 <h3 className="text-xs font-bold text-white font-display">
                   Wheelchair Checklist
                 </h3>
-                <span className="text-[10px] text-emerald-400 font-medium">100% Step-Free Route</span>
+                <span className="text-[10px] text-emerald-400 font-medium">Accessible Pathway Guidance</span>
               </div>
             </div>
           </div>

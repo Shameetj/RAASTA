@@ -13,6 +13,38 @@ import { extractBackendRouteCoordinates } from '../utils/geoUtils';
 
 const NavigationContext = createContext(null);
 
+const INITIAL_ROUTES_STATE = {
+  accessible: {
+    id: 'route-accessible',
+    name: 'Accessible Route',
+    coordinates: [],
+    distanceMeters: null,
+    durationMinutes: null,
+    durationSeconds: null,
+    rerouted: false,
+    status: 'Ready to calculate',
+    score: null,
+    scoreRating: null,
+    alerts: [],
+    message: '',
+    summary: 'Accessible route calculated from real-time coordinates.',
+    segments: []
+  },
+  fastest: {
+    id: 'route-fastest',
+    name: 'Direct Route',
+    coordinates: [],
+    distanceMeters: null,
+    durationMinutes: null,
+    durationSeconds: null,
+    isBlocked: false,
+    blockedReason: null,
+    score: null,
+    barriers: [],
+    segments: []
+  }
+};
+
 export function NavigationProvider({ children }) {
   const [currentStep, setCurrentStep] = useState('home'); // 'home' | 'profile' | 'destination' | 'map' | 'results' | 'report'
   const [selectedProfileId, setSelectedProfileId] = useState('wheelchair');
@@ -23,7 +55,7 @@ export function NavigationProvider({ children }) {
   
   const [barriers, setBarriers] = useState(INITIAL_BARRIERS);
   const [accessibleFeatures, setAccessibleFeatures] = useState(INITIAL_ACCESSIBLE_FEATURES);
-  const [routes, setRoutes] = useState(MOCK_ROUTES_DATA);
+  const [routes, setRoutes] = useState(INITIAL_ROUTES_STATE);
   
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [isMobileFrameView, setIsMobileFrameView] = useState(true); // Default to realistic mobile frame for showcase
@@ -116,10 +148,11 @@ export function NavigationProvider({ children }) {
         console.log('[RAASTA] Received calculated route from backend:', result);
         setApiError(null);
 
-        // 1. Extract backend accessible / rerouted coordinates (Backend -> coordinates -> Leaflet Polyline)
+        // 1. Extract backend accessible coordinates (Backend -> coordinates -> Leaflet Polyline)
+        const routeData = result.route || result;
         const backendAccessibleCoords = extractBackendRouteCoordinates(
-          result.route?.coordinates ||
-          result.route ||
+          routeData.coordinates ||
+          routeData ||
           result.alternative_route || 
           result.accessible_route || 
           result.safe_route || 
@@ -127,116 +160,103 @@ export function NavigationProvider({ children }) {
           (result.routes && result.routes[0] ? result.routes[0] : null)
         );
 
-        // 2. Extract backend direct / fastest coordinates
+        // 2. Extract backend direct coordinates
         const backendDirectCoords = extractBackendRouteCoordinates(
           result.direct_route || 
           result.fastest_route ||
           (result.routes && result.routes[1] ? result.routes[1] : null)
         );
 
-        // 3. Extract metrics
-        const distanceMeters = result.route?.distance_meters ?? result.distance_meters ?? result.alternative_route?.distance_meters ?? 620;
-        const durationSeconds = result.route?.duration_seconds ?? (result.duration_minutes ? result.duration_minutes * 60 : 540);
-        const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
-        const isRerouted = result.rerouted ?? (result.alternative_route ? true : true);
+        // 3. Extract actual backend distance, duration, rerouted status, alerts
+        const distanceMeters = routeData.distance_meters !== undefined ? Number(routeData.distance_meters) : null;
+        const durationSeconds = routeData.duration_seconds !== undefined ? Number(routeData.duration_seconds) : null;
+        const durationMinutes = durationSeconds !== null ? Math.max(1, Math.round(durationSeconds / 60)) : null;
+        const isRerouted = Boolean(result.rerouted);
+        const alertsList = Array.isArray(result.alerts) ? result.alerts : (Array.isArray(result.visual_alerts) ? result.visual_alerts : []);
 
-        // 4. Extract path sequence nodes & blockage details
-        const altPathNodes = result.alternative_route?.path_nodes || 
-          result.alternative_route?.nodes || 
-          result.path_nodes || 
-          result.path || 
-          ['A (Metro Concourse)', 'D (West Promenade Ramp)', 'C (Destination)'];
+        // 4. Real score ONLY if returned by backend (do NOT fabricate)
+        const realScore = result.accessibility_score?.score ?? result.score ?? routeData.score ?? null;
+        const realScoreRating = result.accessibility_score?.grade ?? result.score_rating ?? null;
 
-        const directPathNodes = result.direct_route?.path_nodes || 
-          result.direct_route?.nodes || 
-          ['A (Metro Concourse)', 'B (18 Stairs Hazard)', 'C (Destination)'];
-
-        const bypassedBlockage = result.alternative_route?.bypassed_blockage || 
-          result.direct_route?.blockage_reason || 
-          result.blocked_obstacle || 
-          (result.direct_route?.blockages_found && result.direct_route.blockages_found[0]) || 
-          '18 Concrete Steps at Point B';
-
-        // Update state with backend coordinates & alternative route detour information
+        // Update state with genuine backend route information
         setRoutes(prev => ({
           fastest: {
             ...prev.fastest,
-            name: result.direct_route?.name || prev.fastest.name,
-            durationMinutes: result.direct_route?.duration_minutes ?? Math.max(1, Math.round(durationMinutes * 0.7)),
-            distanceMeters: result.direct_route?.distance_meters ?? Math.round(distanceMeters * 0.85),
-            accessibilityScore: result.direct_route?.accessibility_score ?? (result.direct_route?.is_blocked ? 32 : (isRerouted ? 32 : 80)),
-            isBlocked: result.direct_route?.is_blocked ?? isRerouted,
-            blockedReason: bypassedBlockage,
-            pathNodes: Array.isArray(directPathNodes) ? directPathNodes : prev.fastest.pathNodes,
-            pathSummary: Array.isArray(directPathNodes) ? directPathNodes.join(' ➔ ') : 'A ➔ B ➔ C (Blocked)',
-            blockedNode: result.direct_route?.blocked_node || {
-              id: 'B',
-              name: bypassedBlockage,
-              coordinates: { lat: 28.6335, lng: 77.2190 },
-              badge: 'Blocked at B 🚫'
-            },
-            barriers: result.direct_route?.blockages_found?.map(name => ({ name, type: 'stairs', severity: 'Critical' })) || prev.fastest.barriers,
-            coordinates: backendDirectCoords.length > 0 ? backendDirectCoords : prev.fastest.coordinates
+            name: result.direct_route?.name || 'Direct Route',
+            durationMinutes: result.direct_route?.duration_seconds ? Math.round(result.direct_route.duration_seconds / 60) : null,
+            distanceMeters: result.direct_route?.distance_meters ?? null,
+            isBlocked: isRerouted,
+            blockedReason: alertsList.length > 0 ? (typeof alertsList[0] === 'string' ? alertsList[0] : alertsList[0].message) : (isRerouted ? 'Blockage detected on direct route' : null),
+            score: null,
+            coordinates: backendDirectCoords.length > 0 ? backendDirectCoords : []
           },
           accessible: {
             ...prev.accessible,
-            name: result.alternative_route?.name || (isRerouted ? 'Alternative Step-Free Detour (A ➔ D ➔ C)' : 'Verified Step-Free Route'),
+            name: isRerouted ? 'Alternative Accessible Route' : 'Accessible Route',
             durationMinutes: durationMinutes,
+            durationSeconds: durationSeconds,
             distanceMeters: distanceMeters,
-            accessibilityScore: result.accessibility_score?.score ?? result.alternative_route?.accessibility_score ?? 94,
-            scoreRating: result.accessibility_score?.grade ?? 'Safe & Wheelchair Accessible',
-            isAlternativeRoute: isRerouted,
-            bypassedBlockage: bypassedBlockage,
-            pathNodes: Array.isArray(altPathNodes) ? altPathNodes : prev.accessible.pathNodes,
-            pathSummary: Array.isArray(altPathNodes) ? altPathNodes.join(' ➔ ') : 'A ➔ D ➔ C (Safe Detour)',
-            detourNode: result.alternative_route?.detour_node || {
-              id: 'D',
-              name: 'West Promenade Ramp',
-              coordinates: { lat: 28.6338, lng: 77.2180 },
-              badge: 'Step-Free Detour via D ♿'
-            },
-            summary: result.message || result.alternative_route?.summary || `Alternative detour route (A ➔ D ➔ C) bypassing ${bypassedBlockage} via West Promenade Ramp (D).`,
+            rerouted: isRerouted,
+            status: isRerouted ? '✓ Alternative route found' : '✓ Accessible route found',
+            score: realScore,
+            scoreRating: realScoreRating,
+            alerts: alertsList,
+            message: result.message || (isRerouted ? 'Alternative detour route calculated to bypass blockage.' : 'Accessible route calculated successfully.'),
+            summary: isRerouted ? 'Detour around blockage.' : 'Direct step-free route.',
             segments: (result.turn_by_turn || result.segments || result.steps)?.map(t => ({
               text: t.instruction || t.text || t.description,
-              distance: t.distance || '100m',
+              distance: t.distance || '',
               safe: !t.is_hazard && t.safe !== false,
-              highlight: t.highlight || t.visual_cue || 'Step-free'
-            })) || prev.accessible.segments,
-            coordinates: backendAccessibleCoords.length > 0 ? backendAccessibleCoords : prev.accessible.coordinates
+              highlight: t.highlight || t.visual_cue || ''
+            })) || [],
+            coordinates: backendAccessibleCoords
           }
         }));
 
-        // Parse Backend Alerts
-        const alertsList = result.alerts || result.visual_alerts;
-        if (alertsList && Array.isArray(alertsList) && alertsList.length > 0) {
+        // Parse Backend Alerts for deaf/visual mode
+        if (alertsList.length > 0) {
           setDeafAlerts(alertsList.map((a, i) => ({
             id: `alert-backend-${i}`,
-            title: typeof a === 'string' ? a : (a.title || 'Navigation Alert'),
-            subtitle: typeof a === 'string' ? 'Real-time Route Guidance' : (a.message || a.subtitle || ''),
-            type: typeof a === 'object' && (a.level === 'warning' || a.level === 'danger') ? 'hazard' : 'nav_cue',
-            severity: (typeof a === 'object' && a.level) || 'info',
+            title: typeof a === 'string' ? 'Blockage detected' : (a.title || 'Blockage detected'),
+            subtitle: typeof a === 'string' ? a : (a.message || ''),
+            type: 'hazard',
+            severity: (typeof a === 'object' && a.severity) || 'high',
             timestamp: 'Real-time'
           })));
         }
 
         // Parse Backend Blockages
         if (result.blockages && Array.isArray(result.blockages) && result.blockages.length > 0) {
-          const parsedBlockages = result.blockages.map((b, i) => ({
-            id: b.id || `barr-backend-${i}`,
-            title: b.title || b.name || 'Reported Obstacle',
-            type: b.type || 'stairs',
-            typeLabel: b.type === 'stairs' ? '18 Pedestrian Stairs' : 'Obstacle',
-            severity: b.severity || 'high',
-            locationName: b.location_name || b.locationName || 'Point B Hazard Corridor',
-            coordinates: b.coordinates || { lat: b.latitude || 28.6335, lng: b.longitude || 77.2190 },
-            reportedAt: 'Verified',
-            verificationStatus: 'Verified by Backend',
-            decayStatus: 'Active',
-            description: b.description || 'Blockage bypassed by alternative route.',
-            isOnRouteA: true,
-            isOnRouteB: false
-          }));
-          setBarriers(parsedBlockages);
+          const parsedBlockages = result.blockages.map((b, i) => {
+            const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
+            const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
+            const rawType = (b.type || 'stairs').toLowerCase();
+            const typeLabel = rawType === 'stairs' ? 'Stairs' : (rawType.charAt(0).toUpperCase() + rawType.slice(1));
+            const severity = (b.severity || 'high').toLowerCase();
+            const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
+            const description = b.description || (rawType === 'stairs' ? 'Stairs blocking sidewalk' : `${typeLabel} blocking sidewalk`);
+
+            return {
+              id: b.id || `barr-backend-${i}-${lat}-${lng}`,
+              title: b.title || typeLabel,
+              type: rawType,
+              typeLabel: typeLabel,
+              severity: severity,
+              severityLabel: severityLabel,
+              locationName: b.location_name || b.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+              coordinates: { lat, lng },
+              reportedAt: 'Verified by Backend',
+              verificationStatus: 'Verified by Backend',
+              decayStatus: 'Active',
+              description: description,
+              isOnRouteA: true,
+              isOnRouteB: false
+            };
+          }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
+
+          if (parsedBlockages.length > 0) {
+            setBarriers(parsedBlockages);
+          }
         }
 
         return result;

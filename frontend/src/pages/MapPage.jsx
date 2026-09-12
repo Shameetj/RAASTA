@@ -246,42 +246,43 @@ export default function MapPage() {
         </button>
       </div>
 
-      {/* Alternative Route Detour Banner (When not calculating) */}
-      {!isCalculatingRoute && !isNavSimulating && (
-        <div className="absolute top-16 left-3 right-3 z-[1000] p-2.5 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border shadow-2xl flex items-center justify-between gap-2.5 animate-fade-in transition-all border-emerald-500/70">
+      {/* Backend Alert Notification Banner */}
+      {routes?.accessible?.alerts && routes.accessible.alerts.length > 0 && !isCalculatingRoute && !isNavSimulating && (
+        <div className="absolute top-16 left-3 right-3 z-[1000] p-3 rounded-2xl bg-amber-950/95 backdrop-blur-md border border-amber-500/80 shadow-2xl space-y-1 animate-fade-in text-left">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+            <span>⚠️</span>
+            <span>Blockage detected</span>
+          </div>
+          {routes.accessible.alerts.map((a, i) => (
+            <div key={i} className="text-xs text-white font-medium pl-5 leading-snug">
+              {typeof a === 'string' ? a : a.message}
+            </div>
+          ))}
+          {routes.accessible.rerouted && (
+            <div className="text-[11px] text-emerald-400 font-semibold pl-5 pt-0.5 flex items-center gap-1">
+              <span>✓</span>
+              <span>Alternative accessible route found.</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Alternative Route Detour Banner (When no alerts array but rerouted) */}
+      {(!routes?.accessible?.alerts || routes.accessible.alerts.length === 0) && routes?.accessible?.rerouted && !isCalculatingRoute && !isNavSimulating && (
+        <div className="absolute top-16 left-3 right-3 z-[1000] p-2.5 rounded-2xl bg-[#0f172a]/95 backdrop-blur-md border shadow-2xl flex items-center justify-between gap-2.5 animate-fade-in transition-all border-emerald-500/70 text-left">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-400 flex items-center justify-center font-bold text-xs flex-shrink-0">
-              {activeRouteView === 'accessible' ? '♿' : '⚠️'}
+              ♿
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                  {activeRouteView === 'accessible' ? 'Alternative Detour Active' : 'Blocked Path Preview'}
-                </span>
-                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-600 font-mono font-bold">
-                  {activeRouteView === 'accessible' ? 'A ➔ D ➔ C' : 'A ➔ B ➔ C'}
-                </span>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                Status: ✓ Alternative route found
               </div>
               <div className="text-[11px] font-semibold text-white truncate">
-                {activeRouteView === 'accessible'
-                  ? 'Detouring via D (Ramp) to bypass 18 stairs at B'
-                  : 'Blocked for Wheelchairs (18 concrete stairs at B)'}
+                {routes.accessible.distanceMeters !== null ? `Distance: ${routes.accessible.distanceMeters} m` : 'Detour Active'}
               </div>
             </div>
           </div>
-          
-          {activeRouteView === 'fastest' ? (
-            <button
-              onClick={() => setActiveRouteView('accessible')}
-              className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] whitespace-nowrap shadow-md cursor-pointer transition-all flex-shrink-0"
-            >
-              Use A ➔ D ➔ C
-            </button>
-          ) : (
-            <span className="text-[10px] font-bold text-emerald-300 px-2 py-0.5 rounded-lg bg-emerald-950 border border-emerald-600 flex-shrink-0">
-              Safe 94/100
-            </span>
-          )}
         </div>
       )}
 
@@ -551,10 +552,18 @@ export default function MapPage() {
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase text-emerald-400">Route B (Detour ♿)</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/80 text-emerald-300 font-mono">A➔D➔C</span>
+              <span className="text-[10px] font-black uppercase text-emerald-400">
+                {routes.accessible.rerouted ? 'Alternative (♿ Detour)' : 'Accessible Route'}
+              </span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/80 text-emerald-300 font-mono">
+                {routes.accessible.rerouted ? 'Detour' : 'Direct'}
+              </span>
             </div>
-            <div className="text-xs font-bold text-white mt-0.5">9 min • 94/100 Safe</div>
+            <div className="text-xs font-bold text-white mt-0.5 truncate">
+              {routes.accessible.distanceMeters !== null 
+                ? `${routes.accessible.distanceMeters} m ${routes.accessible.durationMinutes !== null ? `• ${routes.accessible.durationMinutes} min` : ''}`
+                : 'Accessible Path'}
+            </div>
           </button>
 
           <button
@@ -566,10 +575,16 @@ export default function MapPage() {
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase text-rose-400">Route A (Direct 🚫)</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-900/80 text-rose-300 font-mono">A➔B➔C</span>
+              <span className="text-[10px] font-black uppercase text-rose-400">
+                Direct Path
+              </span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-900/80 text-rose-300 font-mono">
+                {routes.fastest.isBlocked ? 'Blocked 🚫' : 'Direct'}
+              </span>
             </div>
-            <div className="text-xs font-bold text-white mt-0.5">6 min • Blocked at B</div>
+            <div className="text-xs font-bold text-white mt-0.5 truncate">
+              {routes.fastest.isBlocked ? 'Blocked by Obstacle' : (routes.fastest.distanceMeters !== null ? `${routes.fastest.distanceMeters} m` : 'Direct Path')}
+            </div>
           </button>
         </div>
 
