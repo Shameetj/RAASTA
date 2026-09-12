@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   ACCESSIBILITY_PROFILES,
   DEMO_DESTINATIONS,
@@ -48,19 +48,29 @@ export function NavigationProvider({ children }) {
   const [currentStep, setCurrentStep] = useState('map'); // 'map' | 'destination' | 'report' | 'results' | 'profile'
   const [selectedProfileId, setSelectedProfileId] = useState('wheelchair');
   const [preferences, setPreferences] = useState(ACCESSIBILITY_PROFILES[0].defaultPreferences);
-  
+
   const [origin, setOrigin] = useState(INITIAL_ORIGIN);
   const [destination, setDestination] = useState(DEMO_DESTINATIONS[0]);
-  
+
   const [barriers, setBarriers] = useState(INITIAL_BARRIERS);
   const [accessibleFeatures, setAccessibleFeatures] = useState(INITIAL_ACCESSIBLE_FEATURES);
   const [routes, setRoutes] = useState(INITIAL_ROUTES_STATE);
-  
+
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [isMobileFrameView, setIsMobileFrameView] = useState(true);
   const [isNavSimulating, setIsNavSimulating] = useState(false);
   const [currentSimSegment, setCurrentSimSegment] = useState(0);
-  
+
+  // Real browser GPS state
+  const [userLocation, setUserLocation] = useState(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [locationError, setLocationError] = useState(null);
+
+  const watchIdRef = useRef(null);
+  const gpsActiveRef = useRef(false);
+  const gpsRetryTimerRef = useRef(null);
+  const reroutedBlockageRef = useRef(null);
+
   const [deafAlerts, setDeafAlerts] = useState(DEAF_MODE_ALERTS);
   const [activeToast, setActiveToast] = useState(null);
   const [isHapticVibrating, setIsHapticVibrating] = useState(false);
@@ -73,11 +83,16 @@ export function NavigationProvider({ children }) {
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
 
   // Calculate route using Dev2 endpoint when destination/profile changes
-  const requestRouteCalculation = async (targetDest = destination, profileId = selectedProfileId) => {
+  const requestRouteCalculation = async (
+    targetDest = destination,
+    profileId = selectedProfileId,
+    startOverride = null
+  ) => {
     setIsCalculatingRoute(true);
     try {
-      const startLat = origin.coordinates?.lat ?? 15.4910;
-      const startLng = origin.coordinates?.lng ?? 73.8260;
+      const startLat = startOverride?.lat ?? origin.coordinates?.lat ?? 15.4910;
+
+      const startLng = startOverride?.lng ?? origin.coordinates?.lng ?? 73.8260;
       const destLat = targetDest.coordinates?.lat ?? 15.4950;
       const destLng = targetDest.coordinates?.lng ?? 73.8310;
 
@@ -96,16 +111,16 @@ export function NavigationProvider({ children }) {
         const backendAccessibleCoords = extractBackendRouteCoordinates(
           routeData.coordinates ||
           routeData ||
-          result.alternative_route || 
-          result.accessible_route || 
-          result.safe_route || 
+          result.alternative_route ||
+          result.accessible_route ||
+          result.safe_route ||
           (result.coordinates ? result : null) ||
           (result.routes && result.routes[0] ? result.routes[0] : null)
         );
 
         // 2. Extract backend direct coordinates
         const backendDirectCoords = extractBackendRouteCoordinates(
-          result.direct_route || 
+          result.direct_route ||
           result.fastest_route ||
           (result.routes && result.routes[1] ? result.routes[1] : null)
         );
@@ -228,9 +243,9 @@ export function NavigationProvider({ children }) {
             const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
             const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
             const rawType = (b.type || 'stairs').toLowerCase();
-            const typeLabel = rawType === 'stairs' ? 'Stairs' : 
-                              rawType === 'broken_ramp' ? 'Broken Ramp' : 
-                              (rawType.charAt(0).toUpperCase() + rawType.slice(1));
+            const typeLabel = rawType === 'stairs' ? 'Stairs' :
+              rawType === 'broken_ramp' ? 'Broken Ramp' :
+                (rawType.charAt(0).toUpperCase() + rawType.slice(1));
             const severity = (b.severity || 'high').toLowerCase();
             const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
             const description = b.description || `${typeLabel} blocking sidewalk`;
@@ -374,32 +389,304 @@ export function NavigationProvider({ children }) {
     return officialBarrier;
   };
 
-  // Navigation simulation loop
-  useEffect(() => {
-    let interval;
-    if (isNavSimulating) {
-      interval = setInterval(() => {
-        setCurrentSimSegment(prev => {
-          const next = prev + 1;
-          const maxSeg = routes.accessible.segments.length;
-          if (next >= maxSeg) {
-            setIsNavSimulating(false);
-            showVisualToast({
-              title: 'Destination Reached Safely! 🎉',
-              subtitle: `Arrived at ${destination.name} via step-free pathway.`,
-              type: 'success'
-            });
-            return 0;
-          }
-          if (selectedProfileId === 'deaf' || preferences.visualHapticAlerts) {
-            triggerHaptic([100, 50, 100]);
-          }
-          return next;
-        });
-      }, 3500);
+  // ---------------------------------------------------------
+  // REAL GPS GUIDANCE
+  // ---------------------------------------------------------
+
+  const handleGeolocationSuccess = (position) => {
+    const {
+      latitude,
+      longitude,
+      accuracy,
+      heading,
+      speed
+    } = position.coords;
+
+    const livePosition = {
+      lat: latitude,
+      lng: longitude,
+      accuracy: accuracy ?? null,
+      heading: heading ?? null,
+      speed: speed ?? null,
+      timestamp: position.timestamp
+    };
+
+    console.log('[RAASTA] GPS position:', livePosition);
+
+    setUserLocation(livePosition);
+    setGpsAccuracy(accuracy ?? null);
+    setLocationError(null);
+
+    // -------------------------------------------------------
+    // WHEELCHAIR BLOCKAGE DETECTION
+    // -------------------------------------------------------
+
+    if (
+      selectedProfileId === 'wheelchair' &&
+      barriers.length > 0
+    ) {
+      const distanceInMeters = (
+        lat1,
+        lng1,
+        lat2,
+        lng2
+      ) => {
+        const R = 6371000;
+
+        const toRad = (value) =>
+          (value * Math.PI) / 180;
+
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLng / 2) ** 2;
+
+        return (
+          2 *
+          R *
+          Math.atan2(
+            Math.sqrt(a),
+            Math.sqrt(1 - a)
+          )
+        );
+      };
+
+      const nearbyBlockage = barriers.find((barrier) => {
+        const barrierLat = Number(
+          barrier.coordinates?.lat ??
+          barrier.latitude
+        );
+
+        const barrierLng = Number(
+          barrier.coordinates?.lng ??
+          barrier.longitude
+        );
+
+        if (
+          Number.isNaN(barrierLat) ||
+          Number.isNaN(barrierLng)
+        ) {
+          return false;
+        }
+
+        const distance = distanceInMeters(
+          latitude,
+          longitude,
+          barrierLat,
+          barrierLng
+        );
+
+        return distance <= 30;
+      });
+
+      if (nearbyBlockage) {
+        const blockageId =
+          nearbyBlockage.id ??
+          nearbyBlockage._id ??
+          `${nearbyBlockage.coordinates?.lat}-${nearbyBlockage.coordinates?.lng}`;
+
+        // Prevent repeated rerouting for the same blockage.
+        if (reroutedBlockageRef.current !== blockageId) {
+          reroutedBlockageRef.current = blockageId;
+
+          console.log(
+            '[RAASTA] 🚨 BLOCKAGE REACHED:',
+            nearbyBlockage
+          );
+
+          console.log(
+            '[RAASTA] 🔄 Recalculating accessible route...'
+          );
+
+          requestRouteCalculation(
+            destination,
+            selectedProfileId,
+            {
+              lat: latitude,
+              lng: longitude
+            }
+          ).catch((error) => {
+            console.error(
+              '[RAASTA] Reroute failed:',
+              error
+            );
+          });
+        }
+      }
     }
-    return () => clearInterval(interval);
-  }, [isNavSimulating, routes.accessible.segments.length, destination.name, selectedProfileId, preferences.visualHapticAlerts]);
+  };
+
+  // ---------------------------------------------------------
+  // START GPS GUIDANCE
+  // ---------------------------------------------------------
+
+  const startGpsGuidance = () => {
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.geolocation
+    ) {
+      setLocationError(
+        'Geolocation is not supported by this browser.'
+      );
+      return;
+    }
+
+    if (gpsActiveRef.current) {
+      console.log(
+        '[RAASTA] GPS guidance already active.'
+      );
+      return;
+    }
+
+    console.log(
+      '[RAASTA] Starting GPS guidance...'
+    );
+
+    gpsActiveRef.current = true;
+
+    // Allow a new blockage detection session.
+    reroutedBlockageRef.current = null;
+
+    setLocationError(null);
+    setIsNavSimulating(true);
+
+    const startWatching = () => {
+      if (!gpsActiveRef.current) {
+        return;
+      }
+
+      if (gpsRetryTimerRef.current) {
+        clearTimeout(gpsRetryTimerRef.current);
+        gpsRetryTimerRef.current = null;
+      }
+
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(
+          watchIdRef.current
+        );
+        watchIdRef.current = null;
+      }
+
+      console.log(
+        '[RAASTA] Starting GPS watch...'
+      );
+
+      watchIdRef.current =
+        navigator.geolocation.watchPosition(
+          handleGeolocationSuccess,
+
+          (error) => {
+            console.warn(
+              '[RAASTA] GPS error:',
+              error
+            );
+
+            if (!gpsActiveRef.current) {
+              return;
+            }
+
+            // Permission denied
+            if (error.code === 1) {
+              setLocationError(
+                'Location permission was denied. Please allow location access in your browser.'
+              );
+              return;
+            }
+
+            // Position unavailable / timeout
+            if (
+              error.code === 2 ||
+              error.code === 3
+            ) {
+              setLocationError(
+                error.code === 2
+                  ? 'Unable to determine your location. Still trying...'
+                  : 'GPS is taking longer than expected. Still trying...'
+              );
+
+              // Retry after 3 seconds.
+              gpsRetryTimerRef.current =
+                setTimeout(() => {
+                  gpsRetryTimerRef.current = null;
+                  startWatching();
+                }, 3000);
+            }
+          },
+
+          {
+            enableHighAccuracy: true,
+            timeout: 30000,
+            maximumAge: 5000
+          }
+        );
+    };
+
+    startWatching();
+  };
+
+  // ---------------------------------------------------------
+  // STOP GPS GUIDANCE
+  // ---------------------------------------------------------
+
+  const stopGpsGuidance = () => {
+    console.log(
+      '[RAASTA] Stopping GPS guidance...'
+    );
+
+    gpsActiveRef.current = false;
+
+    if (gpsRetryTimerRef.current) {
+      clearTimeout(gpsRetryTimerRef.current);
+      gpsRetryTimerRef.current = null;
+    }
+
+    if (
+      watchIdRef.current !== null &&
+      typeof navigator !== 'undefined' &&
+      navigator.geolocation
+    ) {
+      navigator.geolocation.clearWatch(
+        watchIdRef.current
+      );
+      watchIdRef.current = null;
+    }
+
+    setIsNavSimulating(false);
+
+    console.log(
+      '[RAASTA] GPS guidance stopped.'
+    );
+  };
+
+  // ---------------------------------------------------------
+  // GPS CLEANUP
+  // ---------------------------------------------------------
+
+  useEffect(() => {
+    return () => {
+      gpsActiveRef.current = false;
+
+      if (gpsRetryTimerRef.current) {
+        clearTimeout(gpsRetryTimerRef.current);
+        gpsRetryTimerRef.current = null;
+      }
+
+      if (
+        watchIdRef.current !== null &&
+        typeof navigator !== 'undefined' &&
+        navigator.geolocation
+      ) {
+        navigator.geolocation.clearWatch(
+          watchIdRef.current
+        );
+        watchIdRef.current = null;
+      }
+    };
+  }, []);
 
   const value = {
     currentStep,
@@ -424,6 +711,13 @@ export function NavigationProvider({ children }) {
     setIsNavSimulating,
     currentSimSegment,
     setCurrentSimSegment,
+
+    userLocation,
+    gpsAccuracy,
+    locationError,
+    startGpsGuidance,
+    stopGpsGuidance,
+
     deafAlerts,
     activeToast,
     showVisualToast,

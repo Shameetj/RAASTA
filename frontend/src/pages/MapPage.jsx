@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { DEMO_DESTINATIONS, ACCESSIBILITY_PROFILES } from '../data/mockData';
-import { 
-  MapContainer, 
-  TileLayer, 
-  Marker, 
-  Popup, 
-  Polyline, 
-  useMap 
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline,
+  useMap
 } from 'react-leaflet';
 import L from 'leaflet';
 import { normalizeCoordinatesList } from '../utils/geoUtils';
-import { 
-  Play, 
-  Square, 
-  Camera, 
+import {
+  Play,
+  Square,
+  Camera,
   AlertTriangle,
   ChevronDown,
   Navigation as NavIcon,
@@ -116,6 +116,11 @@ export default function MapPage() {
     handleSelectProfile,
     setCurrentStep,
     isNavSimulating,
+    userLocation,
+    gpsAccuracy,
+    locationError,
+    startGpsGuidance,
+    stopGpsGuidance,
     setIsNavSimulating,
     currentSimSegment,
     triggerHaptic,
@@ -136,16 +141,16 @@ export default function MapPage() {
   const accessibleRouteCoords = routes?.accessible?.coordinates && routes.accessible.coordinates.length >= 2
     ? normalizeCoordinatesList(routes.accessible.coordinates)
     : [
-        [startLat, startLng],
-        [destLat, destLng]
-      ];
+      [startLat, startLng],
+      [destLat, destLng]
+    ];
 
   const directRouteCoords = routes?.fastest?.coordinates && routes.fastest.coordinates.length >= 2
     ? normalizeCoordinatesList(routes.fastest.coordinates)
     : [
-        [startLat, startLng],
-        [destLat, destLng]
-      ];
+      [startLat, startLng],
+      [destLat, destLng]
+    ];
 
   // Live simulation position
   const simPositions = accessibleRouteCoords.length > 0 ? accessibleRouteCoords : [[startLat, startLng], [destLat, destLng]];
@@ -189,7 +194,7 @@ export default function MapPage() {
 
   return (
     <div className="relative w-full h-[calc(100vh-130px)] min-h-[520px] flex flex-col overflow-hidden bg-slate-950 font-sans">
-      
+
       {/* 1. Clean App Header with Profile Toggle (Wheelchair / Deaf) */}
       <header className="p-3 bg-slate-900/95 border-b border-slate-800 z-[1000] flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -204,22 +209,20 @@ export default function MapPage() {
           <div className="p-0.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-1">
             <button
               onClick={() => handleSelectProfile('wheelchair')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
-                selectedProfileId === 'wheelchair'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${selectedProfileId === 'wheelchair'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+                }`}
             >
               <span>♿</span>
               <span className="hidden sm:inline">Wheelchair</span>
             </button>
             <button
               onClick={() => handleSelectProfile('deaf')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
-                selectedProfileId === 'deaf'
-                  ? 'bg-cyan-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${selectedProfileId === 'deaf'
+                ? 'bg-cyan-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+                }`}
             >
               <span>🦻</span>
               <span className="hidden sm:inline">Deaf</span>
@@ -266,11 +269,10 @@ export default function MapPage() {
                 <button
                   key={d.id}
                   onClick={() => handleDestinationChange(d)}
-                  className={`w-full p-2 rounded-xl text-left flex items-center justify-between text-xs font-medium transition-all ${
-                    destination.id === d.id
-                      ? 'bg-emerald-600 text-white font-bold'
-                      : 'hover:bg-slate-800 text-slate-300'
-                  }`}
+                  className={`w-full p-2 rounded-xl text-left flex items-center justify-between text-xs font-medium transition-all ${destination.id === d.id
+                    ? 'bg-emerald-600 text-white font-bold'
+                    : 'hover:bg-slate-800 text-slate-300'
+                    }`}
                 >
                   <span className="truncate">{d.name}</span>
                   <span className="text-[10px] opacity-75">{d.category}</span>
@@ -302,7 +304,7 @@ export default function MapPage() {
           <MapResizer />
 
           {/* Dynamic Auto Bounds to fit start, destination, and calculated routes */}
-          <MapBoundsUpdater 
+          <MapBoundsUpdater
             originCoords={{ lat: startLat, lng: startLng }}
             destCoords={{ lat: destLat, lng: destLng }}
             accessibleCoords={accessibleRouteCoords}
@@ -399,7 +401,7 @@ export default function MapPage() {
 
       {/* 4. Bottom Route & Accessibility Status Panel */}
       <div className="p-3.5 bg-slate-900 border-t border-slate-800 space-y-2.5 z-[1000]">
-        
+
         {/* Backend Alert / Reroute Notification */}
         {routes?.accessible?.rerouted && (
           <div className="p-2.5 rounded-xl bg-amber-950/70 border border-amber-500/70 text-amber-200 text-xs flex items-start gap-2">
@@ -440,14 +442,16 @@ export default function MapPage() {
             {/* Start Walk Simulation */}
             <button
               onClick={() => {
-                setIsNavSimulating(!isNavSimulating);
-                triggerHaptic([80]);
+                if (isNavSimulating) {
+                  stopGpsGuidance();
+                } else {
+                  startGpsGuidance();
+                }
               }}
-              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 touch-active transition-all ${
-                isNavSimulating
-                  ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
-              }`}
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 touch-active transition-all ${isNavSimulating
+                ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
+                }`}
             >
               {isNavSimulating ? (
                 <>
