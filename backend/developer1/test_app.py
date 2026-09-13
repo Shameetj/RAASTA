@@ -5,6 +5,7 @@ from database import Base, engine
 from blockages.router import router as blockage_router
 from routes.router import router as routes_router
 from incidents.router import router as incidents_router
+from scoring.router import router as scoring_router
 
 
 # Create database tables
@@ -12,7 +13,7 @@ Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI(
-    title="RAASTA Developer 1 Test API"
+    title="RAASTA Developer 1 Backend API"
 )
 
 
@@ -30,6 +31,7 @@ app.add_middleware(
 app.include_router(blockage_router)
 app.include_router(routes_router)
 app.include_router(incidents_router)
+app.include_router(scoring_router)
 
 
 @app.get("/")

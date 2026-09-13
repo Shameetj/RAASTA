@@ -182,7 +182,7 @@ export default function DestinationPage() {
   // Calculate route
   // -------------------------------------------------------
 
-  const handleShowAccessibleRoutes = async () => {
+  const handleShowAccessibleRoutes = () => {
     if (!destination?.coordinates) {
       showVisualToast({
         title: 'Select a destination',
@@ -194,43 +194,8 @@ export default function DestinationPage() {
       return;
     }
 
-    setIsLoadingRoutes(true);
-    setApiError(null);
-
     triggerHaptic([40, 20]);
-
-    try {
-      console.log(
-        '[RAASTA] Calculating route to selected destination:',
-        destination.coordinates
-      );
-
-      const routeResult = await requestRouteCalculation(
-        destination,
-        selectedProfile.id
-      );
-
-      if (routeResult) {
-        showVisualToast({
-          title: 'Route Ready',
-          subtitle:
-            routeResult.rerouted
-              ? 'Alternative accessible route active.'
-              : 'Accessible route calculated.',
-          type: 'success',
-        });
-
-        setCurrentStep('map');
-      }
-
-    } catch (err) {
-      console.error(
-        '[RAASTA] Error calculating route:',
-        err
-      );
-    } finally {
-      setIsLoadingRoutes(false);
-    }
+    setCurrentStep('map');
   };
 
 

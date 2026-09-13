@@ -1,7 +1,7 @@
 """
-RAASTA Backend API Server
-Implements Dev1 (Blockages Database) & Dev2 (Accessible Routing & Detour Engine)
-Runs locally on port 8000 with full CORS support.
+RAASTA Legacy Development Server (Standalone / Local Testing)
+Note: Production environments use Dev1 FastAPI (test_app.py) & Dev2 FastAPI (routing_api.py).
+This file is preserved for optional standalone offline development.
 """
 
 import http.server

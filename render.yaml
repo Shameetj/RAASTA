@@ -1,10 +1,11 @@
 services:
-  # Authoritative Dev1 Backend Service
+  # Authoritative Dev1 Backend Service (FastAPI)
   - type: web
     name: raasta-dev1
     runtime: python
-    buildCommand: "pip install -r backend/developer1/requirements.txt && pip install -r backend/developer2/requirements.txt"
-    startCommand: "python backend/server.py"
+    rootDir: backend/developer1
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn test_app:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PORT
         value: 8000
@@ -13,12 +14,13 @@ services:
       - key: DEV2_ROUTING_URL
         value: "https://raasta-dev2.onrender.com/route"
 
-  # Dev2 Routing Engine Service
+  # Dev2 Routing Engine Service (FastAPI)
   - type: web
     name: raasta-dev2
     runtime: python
-    buildCommand: "pip install -r backend/developer2/requirements.txt"
-    startCommand: "python backend/server.py"
+    rootDir: backend/developer2
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn routing_api:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PORT
         value: 8001

@@ -222,7 +222,7 @@ export async function reportBlockage(blockageData) {
       id: localId,
       blockage: newBlockage,
       offline: true,
-      message: 'Saved locally — will sync when server is available.'
+      message: 'Saved locally. Not submitted to the RAASTA server.'
     };
   }
 }

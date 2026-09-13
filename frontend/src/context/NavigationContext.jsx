@@ -534,7 +534,7 @@ export function NavigationProvider({ children }) {
       locationName: newBarrier.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
       coordinates: { lat, lng },
       reportedAt: isOffline ? 'Saved Locally' : 'Just Now',
-      verificationStatus: isOffline ? 'Saved locally — will sync when server is available.' : 'Verified by Dev1 Backend',
+      verificationStatus: isOffline ? 'Saved locally. Not submitted to the RAASTA server.' : 'Verified by Dev1 Backend',
       decayStatus: 'Fresh',
       description: description,
       imageUrl: newBarrier.imageUrl,
@@ -547,7 +547,7 @@ export function NavigationProvider({ children }) {
     showVisualToast({
       title: 'Blockage Reported',
       subtitle: isOffline
-        ? 'Saved locally — will sync when server is available.'
+        ? 'Saved locally. Not submitted to the RAASTA server.'
         : 'Registered in Dev1 backend.',
       type: 'success'
     });
