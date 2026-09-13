@@ -197,10 +197,10 @@ export function NavigationProvider({ children }) {
     console.log('[RAASTA DEBUG] 4. requestRouteCalculation() START');
     setIsCalculatingRoute(true);
     try {
-      const rawStartLat = startOverride?.lat ?? userLocation?.lat;
-      const rawStartLng = startOverride?.lng ?? userLocation?.lng;
-      const rawDestLat = targetDest?.coordinates?.lat;
-      const rawDestLng = targetDest?.coordinates?.lng;
+      const rawStartLat = startOverride?.lat ?? startOverride?.latitude ?? userLocation?.lat ?? userLocation?.latitude ?? origin?.coordinates?.lat ?? 15.3850;
+      const rawStartLng = startOverride?.lng ?? startOverride?.longitude ?? userLocation?.lng ?? userLocation?.longitude ?? origin?.coordinates?.lng ?? 73.8150;
+      const rawDestLat = targetDest?.coordinates?.lat ?? targetDest?.latitude ?? targetDest?.lat;
+      const rawDestLng = targetDest?.coordinates?.lng ?? targetDest?.longitude ?? targetDest?.lng;
 
       console.log('[RAASTA DEBUG] 2. GPS coordinates being used as start:', { lat: rawStartLat, lng: rawStartLng });
       console.log('[RAASTA DEBUG] 3. fixed destination coordinates:', { lat: rawDestLat, lng: rawDestLng });
@@ -211,7 +211,7 @@ export function NavigationProvider({ children }) {
         isNaN(Number(rawStartLat)) || isNaN(Number(rawStartLng)) ||
         isNaN(Number(rawDestLat)) || isNaN(Number(rawDestLng))
       ) {
-        const missingErr = new Error('Current GPS location unavailable. Please ensure location services are enabled.');
+        const missingErr = new Error('Destination coordinates missing. Please tap on the map to pin a destination.');
         console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION:', missingErr.message);
         throw missingErr;
       }

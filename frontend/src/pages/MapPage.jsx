@@ -340,13 +340,13 @@ export default function MapPage() {
   }, [loadIncidents, hasRealGps]);
 
   // Only show a route AFTER user presses Start Guidance and calculation completes.
-  const accessibleRouteCoords = hasCalculatedRoute &&
+  const accessibleRouteCoords = (hasCalculatedRoute || isNavSimulating) &&
     routes?.accessible?.coordinates &&
     routes.accessible.coordinates.length >= 2
     ? normalizeCoordinatesList(routes.accessible.coordinates)
     : [];
 
-  const directRouteCoords = hasCalculatedRoute &&
+  const directRouteCoords = (hasCalculatedRoute || isNavSimulating) &&
     routes?.fastest?.coordinates &&
     routes.fastest.coordinates.length >= 2
     ? normalizeCoordinatesList(routes.fastest.coordinates)
@@ -1027,30 +1027,21 @@ export default function MapPage() {
                     return;
                   }
 
-                  // 2. Verify REAL GPS exists - STRICTLY NO FAKE COORDINATES
-                  if (!hasRealGps) {
-                    console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION: Real GPS location is unavailable');
-                    showVisualToast({
-                      title: 'Location Unavailable',
-                      subtitle: 'GPS location not available. Please ensure location services are enabled.',
-                      type: 'error'
-                    });
-                    return;
-                  }
+                  // 2. Resolve start location (live GPS if available, otherwise map/origin anchor)
+                  const startCoords = hasRealGps
+                    ? { lat: realGpsLat, lng: realGpsLng }
+                    : (origin?.coordinates?.lat != null && origin?.coordinates?.lng != null
+                        ? { lat: Number(origin.coordinates.lat), lng: Number(origin.coordinates.lng) }
+                        : { lat: 15.3850, lng: 73.8150 });
 
-                  const realGpsStart = {
-                    lat: realGpsLat,
-                    lng: realGpsLng
-                  };
-
-                  console.log('[RAASTA DEBUG] 2. GPS coordinates being used as start:', realGpsStart);
+                  console.log('[RAASTA DEBUG] 2. Coordinates being used as start:', startCoords);
                   console.log('[RAASTA DEBUG] 3. fixed destination coordinates:', { lat: destLat, lng: destLng });
 
                   try {
                     const result = await requestRouteCalculation(
                       destination,
                       selectedProfileId,
-                      realGpsStart,
+                      startCoords,
                       liveIncidents
                     );
 
