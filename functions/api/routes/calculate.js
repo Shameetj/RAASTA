@@ -1,6 +1,6 @@
 /**
- * Cloudflare Pages Function: Route Proxy to Dev1 / Dev2 Backend
- * Authoritative Path: React -> CF Pages -> Dev1 (with instant fallback to Dev2) -> React
+ * Cloudflare Pages Function: Route Proxy to Dev2 / Dev1 Backend
+ * Authoritative Path: React -> CF Pages -> Dev2 Routing Engine -> React
  */
 
 export async function onRequestPost(context) {
@@ -15,18 +15,25 @@ export async function onRequestPost(context) {
     });
   }
 
-  const dev1Url = context.env?.DEV1_URL || 'https://raasta-dev1.onrender.com';
   const dev2Url = context.env?.DEV2_URL || 'https://raasta-dev2.onrender.com';
+  const dev1Url = context.env?.DEV1_URL || 'https://raasta-dev1.onrender.com';
 
-  // 1. Try Dev1 backend first with an 8-second timeout
+  const dev2Payload = {
+    start: body.start,
+    destination: body.destination,
+    profile: body.profile || 'wheelchair',
+    active_blockages: Array.isArray(body.blockages) ? body.blockages : (body.active_blockages || [])
+  };
+
+  // 1. Primary path: Direct to Developer 2 Routing Engine (Lightning-fast ~600ms)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-    const res = await fetch(`${dev1Url}/api/routes/calculate`, {
+    const res = await fetch(`${dev2Url}/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(dev2Payload),
       signal: controller.signal
     });
     clearTimeout(timeoutId);
@@ -43,26 +50,19 @@ export async function onRequestPost(context) {
         });
       }
     }
-  } catch (dev1Err) {
-    console.warn('[RAASTA CF] Dev1 unreachable or timed out, routing directly to Dev2:', dev1Err.message);
+  } catch (dev2Err) {
+    console.warn('[RAASTA CF] Dev2 primary route failed:', dev2Err.message);
   }
 
-  // 2. Resilient fallback directly to Dev2 routing engine
+  // 2. Secondary fallback: Dev1 route endpoint
   try {
     const controller2 = new AbortController();
-    const timeoutId2 = setTimeout(() => controller2.abort(), 25000);
+    const timeoutId2 = setTimeout(() => controller2.abort(), 12000);
 
-    const dev2Payload = {
-      start: body.start,
-      destination: body.destination,
-      profile: body.profile || 'wheelchair',
-      active_blockages: Array.isArray(body.blockages) ? body.blockages : (body.active_blockages || [])
-    };
-
-    const res2 = await fetch(`${dev2Url}/route`, {
+    const res2 = await fetch(`${dev1Url}/api/routes/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dev2Payload),
+      body: JSON.stringify(body),
       signal: controller2.signal
     });
     clearTimeout(timeoutId2);
@@ -77,8 +77,8 @@ export async function onRequestPost(context) {
         }
       });
     }
-  } catch (dev2Err) {
-    console.error('[RAASTA CF] Dev2 routing fallback error:', dev2Err);
+  } catch (dev1Err) {
+    console.error('[RAASTA CF] Dev1 fallback error:', dev1Err.message);
   }
 
   return new Response(JSON.stringify({
