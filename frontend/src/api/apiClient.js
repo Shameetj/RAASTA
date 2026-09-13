@@ -8,7 +8,7 @@
  * Dev2 may need to query OSRM multiple times.
  */
 
-const PRIMARY_URL = import.meta.env.VITE_API_URL || 'https://teach-ladies-plans-mega.trycloudflare.com/api';
+const PRIMARY_URL = import.meta.env.VITE_API_URL || '/api';
 
 const LOCAL_FALLBACK_URL =
   'http://localhost:8000/api';
