@@ -98,30 +98,38 @@ The unified backend will start on **`http://localhost:8000`**.
 
 ```text
                +-------------------------------------------+
-               |        User Interface (React + Vite)      |
+               |        React Frontend (Vite / PWA)        |
                |  - Leaflet / OpenStreetMap Canvas         |
                |  - Real Mobile GPS Geolocation Tracker    |
-               |  - Wheelchair / Deaf Mode Profiles        |
+               |  - Wheelchair / Deaf Profiles             |
                +---------------------+---------------------+
                                      |
-               +---------------------+---------------------+
-               |      Cloudflare Edge Serverless API       |
-               |  - /api/routes/calculate                  |
-               |  - /api/blockages & /api/locations        |
+                                     ▼
+               +-------------------------------------------+
+               |        Developer 1 Backend (Render)       |
+               |  - SQLite Blockages Database              |
+               |  - TomTom Live Road Incidents             |
+               |  - Authoritative Accessibility Scoring    |
                +---------------------+---------------------+
                                      |
+                                     ▼
+               +-------------------------------------------+
+               |     Developer 2 Routing Engine (Render)   |
+               |  - Route Geometry Collision Detection     |
+               |  - Dynamic Detour & Waypoint Calculation  |
                +---------------------+---------------------+
-               |    OSRM & Dijkstra Pathfinding Engine     |
-               |  - Global OpenStreetMap Road Network      |
-               |  - Collision & Hazard Buffer Detection    |
-               |  - Real-Time Detour Rerouting             |
+                                     |
+                                     ▼
+               +-------------------------------------------+
+               |       OSRM (OpenStreetMap Road Network)   |
+               |  - Real-World Pedestrian Way Network      |
                +-------------------------------------------+
 ```
 
 - **Frontend**: React 18, Vite, React-Leaflet, TailwindCSS, Lucide Icons, Canvas-Confetti.
-- **Routing Engine**: OpenStreetMap (OSRM) Road Graph, Dijkstra Shortest Path, Haversine collision math.
-- **Backend**: Python FastAPI, HTTP server, SQLite/In-memory store.
-- **Hosting**: Cloudflare Pages, Edge Functions, GitHub.
+- **Developer 1**: FastAPI, SQLite DB, SQLAlchemy, TomTom Traffic API Proxy, Accessibility Scoring.
+- **Developer 2**: Accessible Routing Engine, Dijkstra Shortest Path, Haversine collision math, OSRM API client.
+- **Hosting**: Render (Dev1 / Dev2), Cloudflare Pages (Frontend / Edge Proxy), GitHub.
 
 ---
 

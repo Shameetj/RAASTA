@@ -81,10 +81,15 @@ export async function fetchBlockages() {
 }
 
 export async function fetchLiveIncidents({ lat, lon, radius = 5000, limit = 15 } = {}) {
-  const queryLat = lat !== undefined ? Number(lat) : 15.4900;
-  const queryLon = lon !== undefined ? Number(lon) : 73.8270;
-  const queryRadius = radius !== undefined ? Number(radius) : 5000;
-  const queryLimit = limit !== undefined ? Number(limit) : 15;
+  if (lat == null || lon == null || isNaN(Number(lat)) || isNaN(Number(lon))) {
+    // Do not silently query demo coordinates when real location is unavailable
+    return [];
+  }
+
+  const queryLat = Number(lat);
+  const queryLon = Number(lon);
+  const queryRadius = Number(radius) || 5000;
+  const queryLimit = Math.max(3, Math.min(Number(limit) || 15, 25));
 
   try {
     const data = await resilientFetch(
@@ -97,37 +102,6 @@ export async function fetchLiveIncidents({ lat, lon, radius = 5000, limit = 15 }
     console.warn('[RAASTA API] Failed to fetch live incidents:', err?.message || err);
     return [];
   }
-}
-
-async function fetchDirectOsrmRoute(startLat, startLng, destLat, destLng) {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/walking/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson&steps=true`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.routes && data.routes.length > 0) {
-        const r = data.routes[0];
-        // Convert GeoJSON [lng, lat] to Leaflet [lat, lng]
-        const coordinates = r.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-        const steps = (r.legs?.[0]?.steps || []).map((s) => ({
-          instruction: s.maneuver?.instruction || s.name || 'Proceed along accessible pathway',
-          distance: `${Math.round(s.distance)}m`,
-          safe: true
-        }));
-        return {
-          coordinates,
-          distance_meters: Math.round(r.distance * 10) / 10,
-          duration_seconds: Math.round(r.duration),
-          turn_by_turn: steps.length > 0 ? steps : [
-            { instruction: 'Proceed along accessible step-free street', distance: `${Math.round(r.distance)}m`, safe: true }
-          ]
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('[RAASTA API] Direct OSRM query warning:', err);
-  }
-  return null;
 }
 
 export async function calculateRoute({ start, destination, profile, blockages = [] }) {
@@ -151,6 +125,10 @@ export async function calculateRoute({ start, destination, profile, blockages = 
       ? Number(destination.longitude ?? destination.lng)
       : Number(destination);
 
+  if (isNaN(startLat) || isNaN(startLng) || isNaN(destLat) || isNaN(destLng)) {
+    throw new Error('Current location unavailable. Please enable location access.');
+  }
+
   const payload = {
     start: {
       latitude: startLat,
@@ -164,67 +142,20 @@ export async function calculateRoute({ start, destination, profile, blockages = 
     blockages
   };
 
-  try {
-    return await resilientFetch(
-      '/routes/calculate',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload)
+  // Production flow: React -> Dev1 -> Dev2 -> OSRM -> React.
+  // If Dev1/Dev2 is unavailable, throw real error. No fake walking route fallback.
+  return await resilientFetch(
+    '/routes/calculate',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
-      4000
-    );
-  } catch (err) {
-    console.log('[RAASTA API] Backend offline/unreachable, querying real OpenStreetMap road engine directly...');
-    const osrm = await fetchDirectOsrmRoute(startLat, startLng, destLat, destLng);
-
-    const R = 6371000;
-    const dLat = ((destLat - startLat) * Math.PI) / 180;
-    const dLon = ((destLng - startLng) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((startLat * Math.PI) / 180) *
-      Math.cos((destLat * Math.PI) / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const approxDist = Math.max(50, Math.round(2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))));
-
-    const routeCoords = osrm?.coordinates && osrm.coordinates.length >= 2
-      ? osrm.coordinates
-      : [
-          [startLat, startLng],
-          [(startLat + destLat) / 2, (startLng + destLng) / 2],
-          [destLat, destLng]
-        ];
-    const distMeters = osrm?.distance_meters ?? approxDist;
-    const durationSeconds = osrm?.duration_seconds ?? Math.round(distMeters / 1.1);
-
-    return {
-      success: true,
-      message: 'Accessible route calculated successfully via OpenStreetMap.',
-      profile: profile === 'deaf' ? 'deaf' : 'wheelchair',
-      rerouted: false,
-      route: {
-        coordinates: routeCoords,
-        distance_meters: distMeters,
-        duration_seconds: durationSeconds
-      },
-      direct_route: {
-        name: 'Direct Route',
-        coordinates: routeCoords,
-        distance_meters: distMeters,
-        duration_seconds: durationSeconds
-      },
-      alerts: [],
-      blockages: [],
-      turn_by_turn: osrm?.turn_by_turn || [
-        { instruction: 'Proceed along accessible pathway', distance: `${Math.round(distMeters * 0.6)}m`, safe: true },
-        { instruction: 'Arrive safely at destination', distance: `${Math.round(distMeters * 0.4)}m`, safe: true }
-      ]
-    };
-  }
+      body: JSON.stringify(payload)
+    },
+    8000
+  );
 }
 
 export async function reportBlockage(blockageData) {
@@ -233,21 +164,25 @@ export async function reportBlockage(blockageData) {
       ? Number(blockageData.latitude)
       : blockageData.coordinates?.lat !== undefined
         ? Number(blockageData.coordinates.lat)
-        : Number(blockageData.lat ?? 15.49);
+        : Number(blockageData.lat);
 
   const lng =
     blockageData.longitude !== undefined
       ? Number(blockageData.longitude)
       : blockageData.coordinates?.lng !== undefined
         ? Number(blockageData.coordinates.lng)
-        : Number(blockageData.lng ?? 73.827);
+        : Number(blockageData.lng);
+
+  if (isNaN(lat) || isNaN(lng) || lat == null || lng == null) {
+    throw new Error('Current location unavailable. Please enable location access.');
+  }
 
   const payload = {
     type: (blockageData.type || blockageData.category || 'stairs').toLowerCase(),
-    title: blockageData.title || 'Integration Test Stairs',
-    description: blockageData.description || 'Stairs blocking accessible path',
-    latitude: !isNaN(lat) ? lat : 15.49,
-    longitude: !isNaN(lng) ? lng : 73.827,
+    title: blockageData.title || 'Obstacle Report',
+    description: blockageData.description || 'Obstacle blocking accessible path',
+    latitude: lat,
+    longitude: lng,
     severity: (() => {
       const severity = (blockageData.severity || 'high').toLowerCase();
       if (severity === 'critical') return 'high';
@@ -286,7 +221,8 @@ export async function reportBlockage(blockageData) {
       success: true,
       id: localId,
       blockage: newBlockage,
-      offline: true
+      offline: true,
+      message: 'Saved locally — will sync when server is available.'
     };
   }
 }

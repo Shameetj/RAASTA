@@ -3,6 +3,10 @@ PENALTIES = {
     "blocked_ramp": 30,
     "blocked_sidewalk": 25,
     "construction": 25,
+    "road_closure": 35,
+    "road_work": 20,
+    "hazard": 20,
+    "accident": 25,
     "broken_pavement": 0,
 }
 
@@ -19,19 +23,28 @@ def calculate_accessibility_score(blockages):
     breakdown = []
 
     for blockage in blockages:
+        # Support both object attributes and dict keys
+        if isinstance(blockage, dict):
+            is_active = blockage.get("is_active", True)
+            b_type = blockage.get("type", "unknown")
+            b_title = blockage.get("title", b_type)
+        else:
+            is_active = getattr(blockage, "is_active", True)
+            b_type = getattr(blockage, "type", "unknown")
+            b_title = getattr(blockage, "title", b_type)
 
         # Ignore inactive blockages
-        if not blockage.is_active:
+        if not is_active:
             continue
 
-        penalty = PENALTIES.get(blockage.type, 0)
+        penalty = PENALTIES.get(b_type, 0)
 
         if penalty > 0:
             score -= penalty
 
             breakdown.append({
-                "type": blockage.type,
-                "title": blockage.title,
+                "type": b_type,
+                "title": b_title,
                 "penalty": -penalty
             })
 

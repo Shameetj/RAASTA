@@ -200,18 +200,6 @@ function RouteBoundsFitter({ currentCoords, destCoords, accessibleCoords, hasCal
   return null;
 }
 
-function DestinationMapPicker({ onSelect }) {
-  useMapEvents({
-    click(e) {
-      onSelect({
-        lat: e.latlng.lat,
-        lng: e.latlng.lng
-      });
-    }
-  });
-  return null;
-}
-
 // Leaflet DivIcon helper
 const createDivIcon = (htmlContent, size = [36, 36]) => {
   return L.divIcon({
@@ -258,42 +246,8 @@ export default function MapPage() {
   const startLng = hasRealGps
     ? Number(userLocation.lng)
     : (origin?.coordinates?.lng ?? 73.8115);
-  const destLat = destination?.coordinates?.lat ?? 15.4950;
-  const destLng = destination?.coordinates?.lng ?? 73.8310;
-
-  const handleMapDestinationSelect = ({ lat, lng }) => {
-    const latitude = Number(lat);
-    const longitude = Number(lng);
-    if (isNaN(latitude) || isNaN(longitude)) return;
-
-    // If guidance was active, reset active route so the user can inspect the new pin and start fresh
-    if (isNavSimulating || hasCalculatedRoute) {
-      stopGpsGuidance();
-      setHasCalculatedRoute(false);
-      setShowExplanation(false);
-    }
-
-    const pinnedDestination = {
-      id: `map-pin-${Date.now()}`,
-      name: 'Pinned Map Location',
-      subtitle: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-      address: `Custom Pinned Point (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
-      category: 'Map Pin',
-      coordinates: {
-        lat: latitude,
-        lng: longitude
-      }
-    };
-
-    setDestination(pinnedDestination);
-    triggerHaptic([40, 20]);
-
-    showVisualToast({
-      title: 'Destination Pinned',
-      subtitle: `${latitude.toFixed(4)}, ${longitude.toFixed(4)} • Press Start Guidance`,
-      type: 'success'
-    });
-  };
+  const destLat = destination?.coordinates?.lat;
+  const destLng = destination?.coordinates?.lng;
 
   const currentViewportRef = useRef({
     lat: startLat,
@@ -303,6 +257,8 @@ export default function MapPage() {
   });
 
   const loadIncidents = useCallback(async ({ lat, lon, radius, limit = 15 }) => {
+    // Only query live incidents when real GPS coordinates exist
+    if (lat == null || lon == null) return;
     try {
       const incidents = await fetchLiveIncidents({
         lat,
@@ -327,12 +283,14 @@ export default function MapPage() {
 
   // Periodic refresh (every 45s) while map screen is active
   useEffect(() => {
-    loadIncidents(currentViewportRef.current);
-    const interval = setInterval(() => {
+    if (hasRealGps) {
       loadIncidents(currentViewportRef.current);
-    }, 45000);
-    return () => clearInterval(interval);
-  }, [loadIncidents, startLat, startLng]);
+      const interval = setInterval(() => {
+        loadIncidents(currentViewportRef.current);
+      }, 45000);
+      return () => clearInterval(interval);
+    }
+  }, [loadIncidents, hasRealGps]);
 
   // Only show a route AFTER user presses Start Guidance and calculation completes.
   const accessibleRouteCoords = hasCalculatedRoute &&
@@ -347,19 +305,24 @@ export default function MapPage() {
     ? normalizeCoordinatesList(routes.fastest.coordinates)
     : [];
 
-  // Compute Accessibility Score and Explanation (Improvement 1 & 6)
+  // Evaluate real accessibility score based on actual detected blockages along this route
   const accessibilityAnalysis = useMemo(() => {
     if (!hasCalculatedRoute || !routes?.accessible) {
       return null;
     }
+    const avoidedBlockages = routes.accessible.rerouted
+      ? (barriers.filter(b => b.isOnRouteA) || [])
+      : [];
+
     return calculateAccessibilityScore({
       route: routes.accessible,
+      backendScore: routes.accessible.score ? { score: routes.accessible.score, grade: routes.accessible.scoreRating } : null,
       rerouted: routes.accessible.rerouted,
-      barriersAvoided: routes.accessible.rerouted ? 2 : 0,
-      liveIncidentsAvoided: liveIncidents.length > 0 ? 1 : 0,
+      activeBlockagesOnRoute: routes.accessible.rerouted ? [] : (barriers.filter(b => b.isOnRouteA) || []),
+      avoidedBlockages,
       profile: selectedProfileId
     });
-  }, [hasCalculatedRoute, routes?.accessible, liveIncidents.length, selectedProfileId]);
+  }, [hasCalculatedRoute, routes?.accessible, barriers, selectedProfileId]);
 
   // Destination marker pinned on map — Cyan target matching original app design (No emoji)
   const destIcon = createDivIcon(
@@ -545,9 +508,6 @@ export default function MapPage() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             maxZoom={19}
           />
-
-          {/* Interactive Map Destination Picker (Tap map to pinpoint destination) */}
-          <DestinationMapPicker onSelect={handleMapDestinationSelect} />
 
           {/* Dynamic pan & zoom watcher to fetch live incidents */}
           <MapViewportWatcher
@@ -780,7 +740,11 @@ export default function MapPage() {
                 <span>ROUTE UPDATED</span>
               </span>
               <span className="font-semibold text-slate-300">
-                +340 m • +2 min • Score: {accessibilityAnalysis?.score || 94}/100
+                {routes?.accessible?.distanceMeters != null && routes?.fastest?.distanceMeters != null
+                  ? `+${Math.max(0, Math.round(routes.accessible.distanceMeters - routes.fastest.distanceMeters))} m`
+                  : '+0 m'} • {routes?.accessible?.durationMinutes != null && routes?.fastest?.durationMinutes != null
+                  ? `+${Math.max(0, routes.accessible.durationMinutes - routes.fastest.durationMinutes)} min`
+                  : '+0 min'} • Score: {accessibilityAnalysis?.score || 100}/100
               </span>
             </div>
           </div>
@@ -798,37 +762,28 @@ export default function MapPage() {
               </span>
             </div>
             <div className="text-xs font-extrabold text-white">
-              Crosswalk Ahead • 120 m
+              {routes?.accessible?.segments?.length > 0
+                ? (routes.accessible.segments[0].text || routes.accessible.segments[0].instruction || 'Follow step-free route')
+                : 'High-contrast visual guidance active.'}
             </div>
             <div className="text-[11px] text-slate-300">
-              Signalized intersection ahead with active pedestrian crossing countdown.
+              {routes?.accessible?.alerts?.length > 0
+                ? (typeof routes.accessible.alerts[0] === 'string' ? routes.accessible.alerts[0] : routes.accessible.alerts[0].message || 'Visual alerts enabled')
+                : 'Visual alert cues and directional guidance active on screen.'}
             </div>
           </div>
         )}
 
-        {/* Destination Selector: Real backend locations from Dev1/Dev2 or custom map pin */}
+        {/* Destination Selector: Real backend locations from Dev1/Dev2 */}
         {Array.isArray(destinations) && (
           <div className="space-y-1.5 pb-2 border-b border-slate-800">
             <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
-              <span>Choose Destination (or tap map to pin):</span>
+              <span>Choose Destination:</span>
               <span className="text-cyan-400 font-normal">
-                {destination?.category === 'Map Pin' ? 'Custom Pinned Point' : 'Backend Verified'}
+                {destination?.category === 'Map Pin' ? 'Custom Destination' : 'Backend Verified'}
               </span>
             </div>
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-              {/* If user pinned a custom map location, show it as an active chip */}
-              {destination?.category === 'Map Pin' && (
-                <button
-                  type="button"
-                  onClick={() => triggerHaptic([30])}
-                  className="flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-cyan-950/90 border border-cyan-500 text-cyan-200 shadow-md shadow-cyan-950/50 touch-active"
-                >
-                  <MapPin className="w-3 h-3 text-cyan-400" />
-                  <span>📍 Pinned ({destination.coordinates?.lat?.toFixed(3)}, {destination.coordinates?.lng?.toFixed(3)})</span>
-                </button>
-              )}
-
-              {/* Verified Backend Locations from Developer 1 / Developer 2 */}
               {destinations.map((loc) => {
                 const isSelected = destination?.id === loc.id;
                 return (
@@ -895,6 +850,15 @@ export default function MapPage() {
                   setHasCalculatedRoute(false);
                   setShowExplanation(false);
                 } else {
+                  if (!hasRealGps) {
+                    showVisualToast({
+                      title: 'Location Unavailable',
+                      subtitle: 'Current location unavailable. Please enable location access.',
+                      type: 'error'
+                    });
+                    return;
+                  }
+
                   const realGpsStart = {
                     lat: startLat,
                     lng: startLng
@@ -913,7 +877,7 @@ export default function MapPage() {
                     console.error('[RAASTA] Start Guidance route calculation failed:', err);
                     showVisualToast({
                       title: 'Route Calculation Failed',
-                      subtitle: 'Please try again.',
+                      subtitle: err.message || 'Please try again.',
                       type: 'error'
                     });
                   }
@@ -987,10 +951,10 @@ export default function MapPage() {
               <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 space-y-0.5">
                 <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Fastest Route</div>
                 <div className="text-xs font-bold text-slate-200">
-                  {routes?.fastest?.distanceMeters ? `${(routes.fastest.distanceMeters / 1000).toFixed(1)} km` : '1.8 km'} • {routes?.fastest?.durationMinutes || 7} min
+                  {routes?.fastest?.distanceMeters != null ? `${(routes.fastest.distanceMeters / 1000).toFixed(1)} km` : '—'} • {routes?.fastest?.durationMinutes != null ? `${routes.fastest.durationMinutes} min` : '—'}
                 </div>
                 <div className="text-[9px] text-rose-400 font-medium">
-                  {routes?.fastest?.isBlocked ? 'Blocked by stairs' : 'Standard route'}
+                  {routes?.fastest?.isBlocked ? 'Blocked by stairs / hazard' : 'Direct step-free'}
                 </div>
               </div>
 
@@ -998,10 +962,10 @@ export default function MapPage() {
               <div className="p-2 rounded-lg bg-emerald-950/40 border border-emerald-700/50 space-y-0.5">
                 <div className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider">RAASTA Accessible</div>
                 <div className="text-xs font-bold text-white">
-                  {routes?.accessible?.distanceMeters ? `${(routes.accessible.distanceMeters / 1000).toFixed(1)} km` : '2.2 km'} • {routes?.accessible?.durationMinutes || 9} min
+                  {routes?.accessible?.distanceMeters != null ? `${(routes.accessible.distanceMeters / 1000).toFixed(1)} km` : '—'} • {routes?.accessible?.durationMinutes != null ? `${routes.accessible.durationMinutes} min` : '—'}
                 </div>
                 <div className="text-[9px] text-emerald-300 font-medium">
-                  {accessibilityAnalysis?.score || 92}/100 Accessibility
+                  {accessibilityAnalysis?.score != null ? `${accessibilityAnalysis.score}/100 Accessibility` : 'Accessible Path'}
                 </div>
               </div>
             </div>

@@ -1,11 +1,26 @@
 services:
+  # Authoritative Dev1 Backend Service
   - type: web
-    name: raasta-backend
+    name: raasta-dev1
     runtime: python
     buildCommand: "pip install -r backend/developer1/requirements.txt && pip install -r backend/developer2/requirements.txt"
     startCommand: "python backend/server.py"
     envVars:
       - key: PORT
         value: 8000
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DEV2_ROUTING_URL
+        value: "https://raasta-dev2.onrender.com/route"
+
+  # Dev2 Routing Engine Service
+  - type: web
+    name: raasta-dev2
+    runtime: python
+    buildCommand: "pip install -r backend/developer2/requirements.txt"
+    startCommand: "python backend/server.py"
+    envVars:
+      - key: PORT
+        value: 8001
       - key: PYTHON_VERSION
         value: 3.11.0

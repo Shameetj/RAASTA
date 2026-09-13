@@ -108,3 +108,115 @@ export function extractBackendRouteCoordinates(routeObj) {
 
   return [];
 }
+
+/**
+ * Calculates Haversine distance in meters between two lat/lng points.
+ */
+export function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth radius in meters
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Calculates the minimum distance in meters from a point to a polyline route.
+ * @param {[number, number]} point - [lat, lng]
+ * @param {Array<[number, number]>} polyline - array of [lat, lng]
+ * @returns {number} Minimum distance in meters
+ */
+export function pointToPolylineDistance(point, polyline) {
+  if (!point || !Array.isArray(polyline) || polyline.length === 0) {
+    return Infinity;
+  }
+  const [pLat, pLng] = point;
+  let minDistance = Infinity;
+
+  for (const vertex of polyline) {
+    if (Array.isArray(vertex) && vertex.length >= 2) {
+      const dist = calculateHaversineDistance(pLat, pLng, vertex[0], vertex[1]);
+      if (dist < minDistance) {
+        minDistance = dist;
+      }
+    }
+  }
+  return minDistance;
+}
+
+/**
+ * Evaluates whether a live incident is accessibility-relevant to the active route.
+ * - Checks obstacle type (road_closure, construction, road_work, accident).
+ *   Excludes traffic / jams which are non-physical traffic info.
+ * - Computes distance using full geometry (Point, LineString, MultiLineString) when present.
+ * - Requires distance <= thresholdMeters (default 45m).
+ * 
+ * @param {Object} incident 
+ * @param {Array<[number, number]>} routeCoords 
+ * @param {number} thresholdMeters 
+ * @returns {boolean}
+ */
+export function isIncidentRouteRelevant(incident, routeCoords, thresholdMeters = 45) {
+  if (!incident || !Array.isArray(routeCoords) || routeCoords.length < 2) {
+    return false;
+  }
+
+  // 1. Filter incident types: Only physical accessibility barriers affect wheelchair routes
+  const rawType = (incident.type || '').toLowerCase();
+  const blockingTypes = ['road_closure', 'construction', 'road_work', 'accident'];
+  const isBlockingType = blockingTypes.includes(rawType) || (incident.severity === 'high' && rawType !== 'traffic');
+
+  if (!isBlockingType) {
+    return false;
+  }
+
+  // 2. Extract all coordinates from incident geometry (full path / all points)
+  const coordsToCheck = [];
+
+  if (incident.geometry?.coordinates) {
+    const gType = incident.geometry.type;
+    const gCoords = incident.geometry.coordinates;
+
+    if (gType === 'Point' && Array.isArray(gCoords) && gCoords.length >= 2) {
+      coordsToCheck.push([gCoords[1], gCoords[0]]);
+    } else if (gType === 'LineString' && Array.isArray(gCoords)) {
+      gCoords.forEach(pt => {
+        if (Array.isArray(pt) && pt.length >= 2) coordsToCheck.push([pt[1], pt[0]]);
+      });
+    } else if (gType === 'MultiLineString' && Array.isArray(gCoords)) {
+      gCoords.forEach(line => {
+        if (Array.isArray(line)) {
+          line.forEach(pt => {
+            if (Array.isArray(pt) && pt.length >= 2) coordsToCheck.push([pt[1], pt[0]]);
+          });
+        }
+      });
+    }
+  }
+
+  // Fallback to top-level latitude & longitude if geometry was missing or empty
+  if (coordsToCheck.length === 0) {
+    const lat = Number(incident.latitude ?? incident.lat);
+    const lng = Number(incident.longitude ?? incident.lng ?? incident.lon);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      coordsToCheck.push([lat, lng]);
+    }
+  }
+
+  if (coordsToCheck.length === 0) {
+    return false;
+  }
+
+  // 3. Minimum distance from any point in the incident to any coordinate in the route
+  for (const pt of coordsToCheck) {
+    const dist = pointToPolylineDistance(pt, routeCoords);
+    if (dist <= thresholdMeters) {
+      return true;
+    }
+  }
+
+  return false;
+}

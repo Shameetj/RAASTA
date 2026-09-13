@@ -148,29 +148,17 @@ export function NavigationProvider({ children }) {
 
     // 1. Fast Network/Wi-Fi fix: returns in <150ms on mobile devices
     navigator.geolocation.getCurrentPosition(
-      (pos) => applyLivePosition(pos, 'fast-network'),
-      (err) => console.warn('[RAASTA] Fast initial GPS error:', err),
-      {
-        enableHighAccuracy: false,
-        timeout: 8000,
-        maximumAge: 60000
-      }
-    );
-
-    // 2. High-Accuracy Satellite Watch: continuous real-time precision updates
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => applyLivePosition(pos, 'high-accuracy-watch'),
-      onLocationError,
+      (pos) => applyLivePosition(pos, 'initial-fix'),
+      (err) => {
+        console.warn('[RAASTA] Initial GPS error:', err);
+        onLocationError(err);
+      },
       {
         enableHighAccuracy: true,
-        timeout: 25000,
-        maximumAge: 2000
+        timeout: 10000,
+        maximumAge: 30000
       }
     );
-
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-    };
   }, []);
 
   const watchIdRef = useRef(null);
@@ -208,11 +196,24 @@ export function NavigationProvider({ children }) {
   ) => {
     setIsCalculatingRoute(true);
     try {
-      const startLat = startOverride?.lat ?? origin.coordinates?.lat ?? 15.4910;
+      const rawStartLat = startOverride?.lat ?? userLocation?.lat ?? origin.coordinates?.lat;
+      const rawStartLng = startOverride?.lng ?? userLocation?.lng ?? origin.coordinates?.lng;
+      const rawDestLat = targetDest?.coordinates?.lat;
+      const rawDestLng = targetDest?.coordinates?.lng;
 
-      const startLng = startOverride?.lng ?? origin.coordinates?.lng ?? 73.8260;
-      const destLat = targetDest.coordinates?.lat ?? 15.4950;
-      const destLng = targetDest.coordinates?.lng ?? 73.8310;
+      if (
+        rawStartLat == null || rawStartLng == null ||
+        rawDestLat == null || rawDestLng == null ||
+        isNaN(Number(rawStartLat)) || isNaN(Number(rawStartLng)) ||
+        isNaN(Number(rawDestLat)) || isNaN(Number(rawDestLng))
+      ) {
+        throw new Error('Current location unavailable. Please enable location access.');
+      }
+
+      const startLat = Number(rawStartLat);
+      const startLng = Number(rawStartLng);
+      const destLat = Number(rawDestLat);
+      const destLng = Number(rawDestLng);
 
       // Unify community reported blockages and live road incidents at the same level
       const unifiedBlockages = [
@@ -221,8 +222,8 @@ export function NavigationProvider({ children }) {
       ];
 
       const result = await calculateRoute({
-        start: { latitude: Number(startLat), longitude: Number(startLng) },
-        destination: { latitude: Number(destLat), longitude: Number(destLng) },
+        start: { latitude: startLat, longitude: startLng },
+        destination: { latitude: destLat, longitude: destLng },
         profile: profileId === 'deaf' ? 'deaf' : 'wheelchair',
         blockages: unifiedBlockages
       });
@@ -469,27 +470,27 @@ export function NavigationProvider({ children }) {
 
   // Add barrier report to Dev1 and recalculate route dynamically
   const addBarrierReport = async (newBarrier) => {
-    // 1. Convert coordinates: coordinates.lat -> latitude, coordinates.lng -> longitude
-    // A report made during/after real GPS guidance must use the phone's
-    // latest GPS position instead of the selected sample/preset location.
-    const gpsReportLat = isNavSimulating ? userLocation?.lat : null;
-    const gpsReportLng = isNavSimulating ? userLocation?.lng : null;
+    const rawLat = userLocation?.lat ?? newBarrier.latitude ?? newBarrier.coordinates?.lat ?? newBarrier.lat;
+    const rawLng = userLocation?.lng ?? newBarrier.longitude ?? newBarrier.coordinates?.lng ?? newBarrier.lng;
 
-    const lat = Number(
-      gpsReportLat != null
-        ? gpsReportLat
-        : (newBarrier.latitude ?? newBarrier.coordinates?.lat ?? newBarrier.lat ?? 15.4900)
-    );
-    const lng = Number(
-      gpsReportLng != null
-        ? gpsReportLng
-        : (newBarrier.longitude ?? newBarrier.coordinates?.lng ?? newBarrier.lng ?? 73.8270)
-    );
+    if (rawLat == null || rawLng == null || isNaN(Number(rawLat)) || isNaN(Number(rawLng))) {
+      const err = new Error('Current location unavailable. Please enable location access.');
+      showVisualToast({
+        title: 'Location Unavailable',
+        subtitle: 'Current location unavailable. Please enable location access.',
+        type: 'error'
+      });
+      throw err;
+    }
+
+    const lat = Number(rawLat);
+    const lng = Number(rawLng);
+
     const rawType = (newBarrier.type || newBarrier.category || 'stairs').toLowerCase();
     const typeLabel = newBarrier.typeLabel || (rawType === 'stairs' ? 'Pedestrian Stairs' : rawType === 'broken_ramp' ? 'Damaged Ramp' : 'Hazard Obstacle');
     const severity = (newBarrier.severity || 'high').toLowerCase();
     const severityLabel = `${severity.toUpperCase()} Severity Barrier`;
-    const title = newBarrier.title || 'Integration Test Stairs';
+    const title = newBarrier.title || 'Obstacle Report';
     const description = newBarrier.description || (rawType === 'stairs' ? 'Stairs blocking accessible path' : 'Obstacle blocking accessible path');
 
     const blockagePayload = {
@@ -502,6 +503,7 @@ export function NavigationProvider({ children }) {
     };
 
     let backendId = null;
+    let isOffline = false;
 
     try {
       // Step 1: POST /api/blockages to Dev1
@@ -510,12 +512,13 @@ export function NavigationProvider({ children }) {
 
       // Step 2: Use the real ID returned from POST /api/blockages
       backendId = response?.id ?? response?.blockage?.id ?? response?.data?.id ?? response?.blockage_id ?? response?._id;
+      isOffline = Boolean(response?.offline);
     } catch (err) {
       console.error('[RAASTA] Failed to save blockage in Dev1:', err);
       setApiError('Unable to connect to RAASTA server. Please try again.');
       showVisualToast({
         title: 'Report Failed',
-        subtitle: 'Unable to connect to RAASTA server. Please try again.',
+        subtitle: err.message || 'Unable to connect to RAASTA server. Please try again.',
         type: 'error'
       });
       throw err;
@@ -530,8 +533,8 @@ export function NavigationProvider({ children }) {
       severityLabel: severityLabel,
       locationName: newBarrier.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
       coordinates: { lat, lng },
-      reportedAt: 'Just Now',
-      verificationStatus: 'Verified by Dev1 Backend',
+      reportedAt: isOffline ? 'Saved Locally' : 'Just Now',
+      verificationStatus: isOffline ? 'Saved locally — will sync when server is available.' : 'Verified by Dev1 Backend',
       decayStatus: 'Fresh',
       description: description,
       imageUrl: newBarrier.imageUrl,
@@ -541,33 +544,11 @@ export function NavigationProvider({ children }) {
 
     setBarriers(prev => [officialBarrier, ...prev.filter(b => b.id !== officialBarrier.id)]);
 
-    // Step 3:
-    // Save the report immediately. If the report was made at the user's
-    // current GPS position, do NOT immediately reroute around a blockage
-    // that the user is already standing on. The backend will use this
-    // blockage for future route calculations, and normal GPS blockage
-    // detection will reroute when the user encounters a blockage ahead.
-    const reportIsAtCurrentGps =
-      isNavSimulating &&
-      userLocation?.lat != null &&
-      userLocation?.lng != null;
-
-    if (!reportIsAtCurrentGps) {
-      try {
-        await requestRouteCalculation(
-          destination,
-          selectedProfileId
-        );
-      } catch (routeErr) {
-        console.error('[RAASTA] Recalculating route after blockage report failed:', routeErr);
-      }
-    }
-
     showVisualToast({
       title: 'Blockage Reported',
-      subtitle: reportIsAtCurrentGps
-        ? 'Saved at your current GPS location.'
-        : 'Registered in Dev1 and route updated.',
+      subtitle: isOffline
+        ? 'Saved locally — will sync when server is available.'
+        : 'Registered in Dev1 backend.',
       type: 'success'
     });
 

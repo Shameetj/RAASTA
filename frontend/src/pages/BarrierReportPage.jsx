@@ -64,11 +64,15 @@ export default function BarrierReportPage() {
         });
       }
 
-      // Safe fallback coordinates (central demo area)
-      const finalLocation = reportLocation || {
-        lat: 15.4900,
-        lng: 73.8270
-      };
+      if (!reportLocation || isNaN(reportLocation.lat) || isNaN(reportLocation.lng)) {
+        showVisualToast({
+          title: 'Location Unavailable',
+          subtitle: 'Current location unavailable. Please enable location access.',
+          type: 'error'
+        });
+        setIsSubmitting(false);
+        return;
+      }
 
       const titleMap = {
         stairs: 'Pedestrian Stairs (No Ramp)',
@@ -85,33 +89,26 @@ export default function BarrierReportPage() {
       };
 
       await addBarrierReport({
-        title: notes.trim() || titleMap[barrierType] || 'Reported Obstacle',
+        title: notes.trim() || titleMap[barrierType] || 'Obstacle Report',
         category: barrierType,
         type: barrierType,
         typeLabel: titleMap[barrierType] || 'Obstacle',
         severity,
-        locationName: reportLocation ? 'Current GPS Location' : 'Map Location',
-        coordinates: finalLocation,
-        latitude: finalLocation.lat,
-        longitude: finalLocation.lng,
-        description: notes.trim() || descMap[barrierType] || 'Obstacle blocking path'
+        locationName: 'Current GPS Location',
+        coordinates: reportLocation,
+        latitude: reportLocation.lat,
+        longitude: reportLocation.lng,
+        description: notes.trim() || descMap[barrierType] || 'Obstacle blocking accessible path'
       });
 
       setIsSubmitted(true);
-      showVisualToast({
-        title: 'Barrier Reported',
-        subtitle: 'The accessibility map has been updated.',
-        type: 'success'
-      });
     } catch (err) {
       console.error('[BarrierReportPage] Error reporting blockage:', err);
       showVisualToast({
-        title: 'Report Saved Locally',
-        subtitle: 'Report was added to your map.',
-        type: 'info'
+        title: 'Report Notice',
+        subtitle: err.message || 'Unable to submit report at this time.',
+        type: 'error'
       });
-      // Even if network warns, show submitted state so user is not stuck
-      setIsSubmitted(true);
     } finally {
       setIsSubmitting(false);
     }

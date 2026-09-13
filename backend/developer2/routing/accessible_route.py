@@ -38,6 +38,41 @@ def point_to_route_distance(
     return minimum_distance
 
 
+def blockage_to_route_distance(blockage, route_coordinates):
+    """
+    Calculate minimum distance from a blockage or live incident to the route.
+    If the blockage has geometry with multiple coordinates (LineString/MultiLineString),
+    evaluate all points in the geometry.
+    """
+    geom = blockage.get("geometry")
+    if isinstance(geom, dict) and geom.get("coordinates"):
+        geom_type = geom.get("type", "")
+        coords = geom.get("coordinates", [])
+        min_dist = float("inf")
+        if geom_type == "LineString":
+            for pt in coords:
+                if len(pt) >= 2:
+                    d = point_to_route_distance(pt[1], pt[0], route_coordinates)
+                    if d < min_dist:
+                        min_dist = d
+            return min_dist
+        elif geom_type == "MultiLineString":
+            for line in coords:
+                for pt in line:
+                    if len(pt) >= 2:
+                        d = point_to_route_distance(pt[1], pt[0], route_coordinates)
+                        if d < min_dist:
+                            min_dist = d
+            return min_dist
+
+    # Fallback to single point (latitude, longitude)
+    lat = blockage.get("latitude")
+    lon = blockage.get("longitude")
+    if lat is not None and lon is not None:
+        return point_to_route_distance(float(lat), float(lon), route_coordinates)
+    return float("inf")
+
+
 def find_blockages_on_route(
     route_coordinates,
     blockages,
@@ -45,16 +80,11 @@ def find_blockages_on_route(
     ignored_blockage_ids=None,
 ):
     """
-    Find active blockages close to the route.
+    Find active blockages close to the route using point or full geometry.
 
     ignored_blockage_ids:
         Blockages that should not be considered blocking for this
         particular route calculation.
-
-        This is useful when rerouting after the user has already
-        reached a blockage. The new route naturally starts close
-        to that blockage, so it should not immediately reject the
-        new route.
     """
 
     ignored_blockage_ids = set(
@@ -69,9 +99,8 @@ def find_blockages_on_route(
         if blockage_id in ignored_blockage_ids:
             continue
 
-        distance = point_to_route_distance(
-            blockage["latitude"],
-            blockage["longitude"],
+        distance = blockage_to_route_distance(
+            blockage,
             route_coordinates,
         )
 
@@ -313,6 +342,7 @@ def calculate_accessible_route(
             "message": "Route is clear.",
             "profile": profile,
             "route": primary_route,
+            "direct_route": primary_route,
             "alerts": [],
             "blockages": [],
             "rerouted": False,
@@ -337,6 +367,7 @@ def calculate_accessible_route(
             "message": "Route is clear.",
             "profile": profile,
             "route": primary_route,
+            "direct_route": primary_route,
             "alerts": [],
             "blockages": [],
             "rerouted": False,
@@ -401,6 +432,7 @@ def calculate_accessible_route(
             ),
             "profile": profile,
             "route": alternative,
+            "direct_route": primary_route,
             "alerts": alerts,
             "blockages": detected_blockages,
             "rerouted": True,
@@ -428,6 +460,7 @@ def calculate_accessible_route(
             ),
             "profile": profile,
             "route": detour_route,
+            "direct_route": primary_route,
             "alerts": alerts,
             "blockages": detected_blockages,
             "rerouted": True,
@@ -445,6 +478,7 @@ def calculate_accessible_route(
         ),
         "profile": profile,
         "route": primary_route,
+        "direct_route": primary_route,
         "alerts": alerts,
         "blockages": detected_blockages,
         "rerouted": False,

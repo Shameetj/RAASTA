@@ -12,7 +12,7 @@ from .schemas import RouteCalculateRequest
 
 DEV2_ROUTING_URL = os.getenv(
     "DEV2_ROUTING_URL",
-    "http://26.228.125.133:8001/route",
+    "https://raasta-dev2.onrender.com/route",
 )
 router = APIRouter(
     prefix="/api/routes",

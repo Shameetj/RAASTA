@@ -23,6 +23,7 @@ BLOCKAGES = [
         "latitude": 15.4909,
         "longitude": 73.8278,
         "severity": "high",
+        "is_active": True,
         "reported_at": "Verified by Dev1"
     },
     {
@@ -33,6 +34,7 @@ BLOCKAGES = [
         "latitude": 15.4915,
         "longitude": 73.8282,
         "severity": "high",
+        "is_active": True,
         "reported_at": "Verified by Dev1"
     },
     {
@@ -43,6 +45,7 @@ BLOCKAGES = [
         "latitude": 15.4920,
         "longitude": 73.8290,
         "severity": "medium",
+        "is_active": True,
         "reported_at": "Verified by Dev1"
     },
     {
@@ -53,6 +56,7 @@ BLOCKAGES = [
         "latitude": 15.4925,
         "longitude": 73.8295,
         "severity": "medium",
+        "is_active": True,
         "reported_at": "Verified by Dev1"
     },
     {
@@ -63,6 +67,7 @@ BLOCKAGES = [
         "latitude": 15.4930,
         "longitude": 73.8300,
         "severity": "high",
+        "is_active": True,
         "reported_at": "Verified by Dev1"
     }
 ]
@@ -317,38 +322,14 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
                 except Exception as osrm_err:
                     print(f"[OSRM Server Notice]: {osrm_err}")
 
-            # 4. Pure geometric fallback relative to user's real start and destination (Never hardcoded)
+            # 4. If routing fails, return a real 503 error
             if not dev2_success:
-                mid_lat = (start_lat + dest_lat) / 2
-                mid_lng = (start_lng + dest_lng) / 2
-                coords = [
-                    [start_lat, start_lng],
-                    [mid_lat, mid_lng],
-                    [dest_lat, dest_lng]
-                ]
-                response = {
-                    "success": True,
-                    "message": "Accessible route calculated successfully.",
-                    "profile": profile,
-                    "rerouted": False,
-                    "route": {
-                        "coordinates": coords,
-                        "distance_meters": 400,
-                        "duration_seconds": 300
-                    },
-                    "direct_route": {
-                        "name": "Direct Route",
-                        "coordinates": coords,
-                        "distance_meters": 400,
-                        "duration_seconds": 300
-                    },
-                    "alerts": [],
-                    "blockages": [],
-                    "turn_by_turn": [
-                        {"instruction": "Proceed along accessible pathway", "distance": "200m", "safe": True},
-                        {"instruction": "Arrive safely at destination", "distance": "200m", "safe": True}
-                    ]
-                }
+                print(f"[Routing Error] Unable to calculate accessible route between ({start_lat}, {start_lng}) and ({dest_lat}, {dest_lng})")
+                self._send_json(503, {
+                    "success": False,
+                    "message": "Unable to calculate an accessible route. Routing service unavailable."
+                })
+                return
 
             dist = response.get('route', {}).get('distance') or response.get('route', {}).get('distance_meters') or 0
             print(f"[Dev2 Routing] Calculated route for {profile}: rerouted={response.get('rerouted')}, distance={dist}m")

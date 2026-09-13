@@ -1,91 +1,21 @@
 /**
- * Cloudflare Pages Function: Live Road Incidents (TomTom Proxy)
- * Endpoint: /api/live-incidents?lat={lat}&lon={lon}&radius={radius}
+ * Cloudflare Pages Function: Live Incidents Proxy to Authoritative Dev1 Backend
  */
 
-function calculateBoundingBox(lat, lon, radiusMeters) {
-  const deltaLat = radiusMeters / 111000.0;
-  const deltaLon = radiusMeters / (111000.0 * Math.max(Math.cos((lat * Math.PI) / 180.0), 0.01));
-  const minLat = (lat - deltaLat).toFixed(6);
-  const maxLat = (lat + deltaLat).toFixed(6);
-  const minLon = (lon - deltaLon).toFixed(6);
-  const maxLon = (lon + deltaLon).toFixed(6);
-  return `${minLon},${minLat},${maxLon},${maxLat}`;
-}
-
-function mapCategory(iconCategory) {
-  switch (iconCategory) {
-    case 0: return { type: 'hazard', severity: 'medium', label: 'Unknown Hazard' };
-    case 1: return { type: 'accident', severity: 'high', label: 'Traffic Accident' };
-    case 2: return { type: 'traffic', severity: 'medium', label: 'Fog / Weather' };
-    case 3: return { type: 'hazard', severity: 'medium', label: 'Dangerous Conditions' };
-    case 4: return { type: 'traffic', severity: 'low', label: 'Rain / Wet Road' };
-    case 5: return { type: 'traffic', severity: 'low', label: 'Ice / Slippery' };
-    case 6: return { type: 'traffic', severity: 'medium', label: 'Traffic Congestion' };
-    case 7: return { type: 'traffic', severity: 'low', label: 'Lane Restriction' };
-    case 8: return { type: 'road_closure', severity: 'high', label: 'Road Closed' };
-    case 9: return { type: 'road_work', severity: 'medium', label: 'Road Work' };
-    case 10: return { type: 'hazard', severity: 'medium', label: 'Wind / Hazard' };
-    case 11: return { type: 'hazard', severity: 'medium', label: 'Flooding' };
-    case 14: return { type: 'traffic', severity: 'low', label: 'Broken Down Vehicle' };
-    default: return { type: 'hazard', severity: 'medium', label: 'Traffic Incident' };
-  }
-}
-
-function extractCoordinates(geometry) {
-  if (!geometry) return null;
-  const geomType = geometry.type;
-  const coords = geometry.coordinates;
-  if (!coords) return null;
-
-  if (geomType === 'Point' && coords.length >= 2) {
-    return { lat: coords[1], lon: coords[0] };
-  }
-  if (geomType === 'LineString' && coords.length > 0) {
-    const pt = coords[0];
-    return { lat: pt[1], lon: pt[0] };
-  }
-  if (geomType === 'MultiLineString' && coords.length > 0 && coords[0].length > 0) {
-    const pt = coords[0][0];
-    return { lat: pt[1], lon: pt[0] };
-  }
-  return null;
-}
-
 export async function onRequestGet(context) {
-  const url = new URL(context.request.url);
-  const lat = parseFloat(url.searchParams.get('lat') || '15.4900');
-  const lon = parseFloat(url.searchParams.get('lon') || '73.8270');
-  const radius = parseFloat(url.searchParams.get('radius') || '5000');
-  const limit = Math.max(3, Math.min(parseInt(url.searchParams.get('limit') || '15', 10), 25));
-
-  const apiKey = context.env?.TOMTOM_API_KEY || '';
-
-  if (!apiKey) {
-    return new Response(JSON.stringify({
-      incidents: [],
-      count: 0,
-      status: 'ok',
-      message: 'TomTom live incidents not configured'
-    }), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
-  }
-
   try {
-    const bbox = calculateBoundingBox(lat, lon, radius);
-    const tomtomUrl = `https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&fields=%7Bincidents%7Btype,geometry%7Btype,coordinates%7D,properties%7Bid,iconCategory,magnitudeOfDelay,events%7Bdescription,code%7D,startTime,endTime%7D%7D%7D&language=en-GB&categoryFilter=0,1,2,3,4,5,6,7,8,9,10,11,14&timeValidityFilter=present&key=${apiKey}`;
+    const url = new URL(context.request.url);
+    const lat = url.searchParams.get('lat');
+    const lon = url.searchParams.get('lon');
+    const radius = url.searchParams.get('radius') || '5000';
+    const limit = url.searchParams.get('limit') || '15';
 
-    const res = await fetch(tomtomUrl);
-    if (!res.ok) {
+    if (!lat || !lon) {
       return new Response(JSON.stringify({
         incidents: [],
         count: 0,
-        status: 'tomtom_error',
-        code: res.status
+        status: 'no_location',
+        message: 'Coordinates required for live incidents query'
       }), {
         headers: {
           'Content-Type': 'application/json',
@@ -94,41 +24,23 @@ export async function onRequestGet(context) {
       });
     }
 
-    const data = await res.json();
-    const rawIncidents = data.incidents || [];
-    const normalized = [];
-
-    for (const inc of rawIncidents) {
-      const props = inc.properties || {};
-      const geom = inc.geometry || {};
-      const pt = extractCoordinates(geom);
-      if (!pt) continue;
-
-      const catInfo = mapCategory(props.iconCategory);
-      let desc = '';
-      if (props.events && props.events.length > 0) {
-        desc = props.events.map(e => e.description).filter(Boolean).join('; ');
-      }
-
-      normalized.push({
-        id: `tomtom-${props.id || Math.random().toString(36).substring(2, 9)}`,
-        type: catInfo.type,
-        title: catInfo.label,
-        description: desc || catInfo.label,
-        severity: catInfo.severity,
-        latitude: pt.lat,
-        longitude: pt.lon,
-        source: 'tomtom',
-        iconCategory: props.iconCategory,
-        startTime: props.startTime || null,
-        endTime: props.endTime || null
+    const dev1Url = context.env?.DEV1_URL || 'https://raasta-dev1.onrender.com';
+    const res = await fetch(`${dev1Url}/api/live-incidents?lat=${lat}&lon=${lon}&radius=${radius}&limit=${limit}`);
+    
+    if (res.ok) {
+      const data = await res.json();
+      return new Response(JSON.stringify(data), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     }
 
     return new Response(JSON.stringify({
-      incidents: normalized,
-      count: normalized.length,
-      status: 'ok'
+      incidents: [],
+      count: 0,
+      status: 'unavailable'
     }), {
       headers: {
         'Content-Type': 'application/json',
