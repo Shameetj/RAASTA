@@ -386,25 +386,36 @@ export default function RouteResultsPage() {
       <div className="p-3.5 rounded-2xl bg-[#131b2e] border border-slate-800 space-y-2">
         <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
           <Footprints className="w-3.5 h-3.5 text-emerald-400" />
-          Step-by-Step Walk Guidance
+          <span>Step-by-Step Walk Guidance</span>
         </h3>
 
-        <div className="space-y-1.5">
-          {accessible.segments.map((seg, idx) => (
-            <div key={idx} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800/80 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center text-[10px] font-bold">
-                  {idx + 1}
-                </span>
-                <div>
-                  <div className="text-slate-200">{seg.text}</div>
-                  <div className="text-[10px] text-emerald-400">{seg.highlight}</div>
+        {Array.isArray(accessible.segments) && accessible.segments.length > 0 ? (
+          <div className="space-y-1.5">
+            {accessible.segments.map((seg, idx) => (
+              <div key={idx} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800/80 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center text-[10px] font-bold">
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <div className="text-slate-200">{seg.text}</div>
+                    {seg.highlight && <div className="text-[10px] text-emerald-400">{seg.highlight}</div>}
+                  </div>
                 </div>
+                {seg.distance && <span className="text-[10px] font-mono text-slate-400">{seg.distance}</span>}
               </div>
-              <span className="text-[10px] font-mono text-slate-400">{seg.distance}</span>
+            ))}
+          </div>
+        ) : (
+          <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800/80 text-xs text-slate-300">
+            <div className="text-emerald-400 font-semibold mb-1">
+              ✓ Accessible path ready
             </div>
-          ))}
-        </div>
+            <div className="text-[11px] text-slate-400">
+              Follow the highlighted step-free route on the map ({accessible.distanceMeters ? `${Math.round(accessible.distanceMeters)} m` : 'Calculated'} • {accessible.durationMinutes ? `${accessible.durationMinutes} min` : 'Direct'}).
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Actions */}

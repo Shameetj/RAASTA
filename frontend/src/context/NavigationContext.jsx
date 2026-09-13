@@ -325,65 +325,34 @@ export function NavigationProvider({ children }) {
           message: result.message || (isRerouted ? 'Alternative detour route calculated to bypass blockage.' : 'Accessible route calculated successfully.'),
           summary: isRerouted ? 'Detour around blockage.' : 'Direct step-free route.',
           segments: (() => {
-            const rawSegments = (result.turn_by_turn || result.segments || result.steps)?.map(t => ({
-              text: t.instruction || t.text || t.description,
-              distance: t.distance || '',
-              safe: !t.is_hazard && t.safe !== false,
-              highlight: t.highlight || t.visual_cue || ''
-            })) || [];
+            const rawSegments = result.turn_by_turn || result.segments || result.steps ||
+              accessibleRouteObj.turn_by_turn || accessibleRouteObj.segments || accessibleRouteObj.steps ||
+              (Array.isArray(accessibleRouteObj.legs) ? accessibleRouteObj.legs.flatMap(l => l.steps || []) : null);
 
-            if (rawSegments.length > 0) return rawSegments;
-
-            const totalDist = distanceMeters || Math.round(backendAccessibleCoords.length * 25);
-            if (isRerouted) {
-              return [
-                {
-                  text: `Depart on step-free accessible sidewalk towards ${targetDest?.name || 'Destination'}`,
-                  distance: '0 m',
-                  safe: true,
-                  highlight: 'Tactile paving active'
-                },
-                {
-                  text: 'Bypass obstacle via step-free detour pathway',
-                  distance: `${Math.round(totalDist * 0.4)} m`,
-                  safe: true,
-                  highlight: 'Zero stairs • 1:12 slope ramp'
-                },
-                {
-                  text: 'Continue along accessible clear route',
-                  distance: `${Math.round(totalDist * 0.8)} m`,
-                  safe: true,
-                  highlight: 'Wide level pathway'
-                },
-                {
-                  text: `Arrive at ${targetDest?.name || 'Destination'}`,
-                  distance: `${totalDist} m`,
-                  safe: true,
-                  highlight: 'Level-0 entrance'
-                }
-              ];
+            if (!Array.isArray(rawSegments) || rawSegments.length === 0) {
+              return [];
             }
 
-            return [
-              {
-                text: `Depart on accessible path towards ${targetDest?.name || 'Destination'}`,
-                distance: '0 m',
-                safe: true,
-                highlight: 'Tactile paving & gentle slope'
-              },
-              {
-                text: 'Follow level sidewalk with step-free crossing',
-                distance: `${Math.round(totalDist * 0.5)} m`,
-                safe: true,
-                highlight: 'Accessible pathway'
-              },
-              {
-                text: `Arrive at ${targetDest?.name || 'Destination'}`,
-                distance: `${totalDist} m`,
-                safe: true,
-                highlight: 'Level-0 step-free entrance'
+            return rawSegments.map((t, idx) => {
+              let coords = null;
+              if (t.coordinates) {
+                coords = t.coordinates;
+              } else if (t.location && Array.isArray(t.location) && t.location.length >= 2) {
+                coords = { lat: Number(t.location[1]), lng: Number(t.location[0]) };
+              } else if (t.lat != null && t.lng != null) {
+                coords = { lat: Number(t.lat), lng: Number(t.lng) };
               }
-            ];
+
+              return {
+                index: idx + 1,
+                text: t.instruction || t.text || t.description || (t.maneuver && t.maneuver.instruction) || '',
+                distance: t.distance_meters != null ? `${Math.round(t.distance_meters)} m` : (t.distance != null ? `${t.distance}` : ''),
+                duration: t.duration_seconds != null ? `${Math.round(t.duration_seconds)} s` : (t.duration != null ? `${t.duration}` : ''),
+                safe: t.is_hazard ? false : (t.safe !== false),
+                highlight: t.highlight || t.visual_cue || '',
+                coordinates: coords
+              };
+            }).filter(s => s.text);
           })(),
           coordinates: backendAccessibleCoords
         }

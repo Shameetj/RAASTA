@@ -325,45 +325,40 @@ export default function MapPage() {
     });
   }, [hasCalculatedRoute, routes?.accessible, barriers, selectedProfileId]);
 
-  // Compute numbered waymark checkpoints along the calculated accessible route
+  // Compute waymark checkpoints ONLY when real step coordinates are provided by backend
   const routeWaymarks = useMemo(() => {
     if (!hasCalculatedRoute || accessibleRouteCoords.length < 2) return [];
 
     const segments = routes?.accessible?.segments || [];
     if (segments.length === 0) return [];
 
-    return segments.map((seg, idx) => {
-      let lat, lng;
-      if (seg.coordinates?.lat != null && seg.coordinates?.lng != null) {
-        lat = Number(seg.coordinates.lat);
-        lng = Number(seg.coordinates.lng);
-      } else if (idx === 0) {
-        lat = accessibleRouteCoords[0][0];
-        lng = accessibleRouteCoords[0][1];
-      } else if (idx === segments.length - 1) {
-        lat = accessibleRouteCoords[accessibleRouteCoords.length - 1][0];
-        lng = accessibleRouteCoords[accessibleRouteCoords.length - 1][1];
-      } else {
-        const coordIdx = Math.min(
-          accessibleRouteCoords.length - 1,
-          Math.round((idx / (segments.length - 1)) * (accessibleRouteCoords.length - 1))
-        );
-        lat = accessibleRouteCoords[coordIdx][0];
-        lng = accessibleRouteCoords[coordIdx][1];
-      }
+    return segments
+      .map((seg, idx) => {
+        let lat = null;
+        let lng = null;
+        if (seg.coordinates?.lat != null && seg.coordinates?.lng != null) {
+          lat = Number(seg.coordinates.lat);
+          lng = Number(seg.coordinates.lng);
+        } else if (Array.isArray(seg.coordinates) && seg.coordinates.length >= 2) {
+          lat = Number(seg.coordinates[0]);
+          lng = Number(seg.coordinates[1]);
+        }
 
-      return {
-        index: idx + 1,
-        isFirst: idx === 0,
-        isLast: idx === segments.length - 1,
-        lat,
-        lng,
-        instruction: seg.text || seg.instruction || `Waymark ${idx + 1}`,
-        distance: seg.distance || '',
-        safe: seg.safe !== false,
-        highlight: seg.highlight || seg.visual_cue || ''
-      };
-    });
+        if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
+          return null;
+        }
+
+        return {
+          index: idx + 1,
+          lat,
+          lng,
+          instruction: seg.text || seg.instruction || `Checkpoint ${idx + 1}`,
+          distance: seg.distance || '',
+          safe: seg.safe !== false,
+          highlight: seg.highlight || seg.visual_cue || ''
+        };
+      })
+      .filter(Boolean);
   }, [hasCalculatedRoute, accessibleRouteCoords, routes?.accessible?.segments]);
 
   // Custom numbered milestone marker icon for waymarks along the route
@@ -832,11 +827,13 @@ export default function MapPage() {
                   <span>Accessible Guidance</span>
                 </span>
                 <span className="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-[9px] border border-slate-700 font-semibold">
-                  {routes?.accessible?.distanceMeters != null ? `${routes.accessible.distanceMeters} m` : 'Active'}
+                  {routes?.accessible?.distanceMeters != null ? `${Math.round(routes.accessible.distanceMeters)} m` : 'Active'}
                 </span>
               </div>
               <div className="text-xs font-bold text-white truncate mt-0.5">
-                {routes?.accessible?.segments?.[0]?.text || `Follow step-free path to ${destination?.name || 'Destination'}`}
+                {routes?.accessible?.segments?.length > 0
+                  ? (routes.accessible.segments[0].text || routes.accessible.segments[0].instruction)
+                  : `Follow the accessible route to ${destination?.name || 'Destination'}`}
               </div>
               {routes?.accessible?.segments?.[0]?.highlight && (
                 <div className="text-[10px] text-emerald-300/90 font-medium truncate">
@@ -1143,48 +1140,71 @@ export default function MapPage() {
         </div>
 
         {/* Step-by-Step Waymarks & Navigation Guidance Output Card */}
-        {hasCalculatedRoute && routes?.accessible?.segments && routes.accessible.segments.length > 0 && (
+        {hasCalculatedRoute && (
           <div className="p-3 rounded-xl bg-slate-900 border border-emerald-500/40 space-y-2.5 animate-fade-in">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs font-bold text-white">
                 <Milestone className="w-4 h-4 text-emerald-400" />
-                <span>Waymarks & Turn-by-Turn Guidance</span>
+                <span>
+                  {routes?.accessible?.segments && routes.accessible.segments.length > 0
+                    ? 'Waymarks & Turn-by-Turn Guidance'
+                    : 'Route Guidance'}
+                </span>
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700/60 font-semibold">
-                {routes.accessible.segments.length} Checkpoints
+                {routes?.accessible?.segments && routes.accessible.segments.length > 0
+                  ? `${routes.accessible.segments.length} Checkpoints`
+                  : 'Active Route'}
               </span>
             </div>
 
-            <div className="space-y-1.5 pt-1 border-t border-slate-800/80 max-h-48 overflow-y-auto pr-1">
-              {routes.accessible.segments.map((seg, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-2.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition-colors"
-                >
-                  <div className="w-6 h-6 rounded-lg bg-emerald-950 border border-emerald-600/60 text-emerald-300 font-extrabold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
-                    {idx + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-slate-100 leading-snug">
-                      {seg.text || seg.instruction}
+            {routes?.accessible?.segments && routes.accessible.segments.length > 0 ? (
+              <div className="space-y-1.5 pt-1 border-t border-slate-800/80 max-h-48 overflow-y-auto pr-1">
+                {routes.accessible.segments.map((seg, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-2.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-emerald-950 border border-emerald-600/60 text-emerald-300 font-extrabold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+                      {idx + 1}
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      {seg.distance && (
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          {seg.distance}
-                        </span>
-                      )}
-                      {seg.highlight && (
-                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                          <span>{seg.highlight}</span>
-                        </span>
-                      )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-slate-100 leading-snug">
+                        {seg.text || seg.instruction}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {seg.distance && (
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {seg.distance}
+                          </span>
+                        )}
+                        {seg.highlight && (
+                          <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                            <span>{seg.highlight}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-slate-800/80 space-y-1.5 text-xs text-slate-300">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>Follow highlighted accessible route on map</span>
                 </div>
-              ))}
-            </div>
+                <div className="text-[11px] text-slate-400">
+                  {routes?.accessible?.distanceMeters != null
+                    ? `Total distance: ${Math.round(routes.accessible.distanceMeters)} m`
+                    : ''}
+                  {routes?.accessible?.durationMinutes != null
+                    ? ` • Estimated duration: ${routes.accessible.durationMinutes} min`
+                    : ''}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
