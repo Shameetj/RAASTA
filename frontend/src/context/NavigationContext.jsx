@@ -101,9 +101,8 @@ export function NavigationProvider({ children }) {
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [locationError, setLocationError] = useState(null);
 
-  // Get one real GPS fix as soon as the app loads.
-  // This updates the app's origin/current location without starting guidance
-  // or calculating a route automatically.
+  // Continuously track real mobile/browser GPS location from the moment the app loads.
+  // This ensures the map centers on the user's actual mobile location immediately on reload.
   useEffect(() => {
     if (
       typeof navigator === 'undefined' ||
@@ -112,69 +111,68 @@ export function NavigationProvider({ children }) {
       return;
     }
 
-    console.log('[RAASTA] Requesting current GPS location on app load...');
+    console.log('[RAASTA] Starting real mobile GPS watch on app load...');
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const {
-          latitude,
-          longitude,
-          accuracy,
-          heading,
-          speed
-        } = position.coords;
+    const onLocationSuccess = (position) => {
+      const {
+        latitude,
+        longitude,
+        accuracy,
+        heading,
+        speed
+      } = position.coords;
 
-        const livePosition = {
+      const livePosition = {
+        lat: latitude,
+        lng: longitude,
+        accuracy: accuracy ?? null,
+        heading: heading ?? null,
+        speed: speed ?? null,
+        timestamp: position.timestamp
+      };
+
+      console.log('[RAASTA] 📍 Live mobile GPS fix:', livePosition);
+
+      try {
+        localStorage.setItem(SAVED_GPS_KEY, JSON.stringify(livePosition));
+      } catch (e) {}
+
+      setUserLocation(livePosition);
+      setGpsAccuracy(accuracy ?? null);
+      setLocationError(null);
+
+      setOrigin((prev) => ({
+        ...prev,
+        name: 'Current Location',
+        coordinates: {
           lat: latitude,
-          lng: longitude,
-          accuracy: accuracy ?? null,
-          heading: heading ?? null,
-          speed: speed ?? null,
-          timestamp: position.timestamp
-        };
-
-        console.log(
-          '[RAASTA] 📍 Initial real GPS location:',
-          livePosition
-        );
-
-        // Save to localStorage for instant centering on next reload
-        try {
-          localStorage.setItem(SAVED_GPS_KEY, JSON.stringify(livePosition));
-        } catch (e) {}
-
-        // Make the real phone GPS the app origin.
-        setUserLocation(livePosition);
-        setGpsAccuracy(accuracy ?? null);
-        setOrigin((previousOrigin) => ({
-          ...previousOrigin,
-          name: 'Current Location',
-          coordinates: {
-            ...(previousOrigin?.coordinates || {}),
-            lat: latitude,
-            lng: longitude
-          }
-        }));
-        setLocationError(null);
-      },
-      (error) => {
-        console.warn(
-          '[RAASTA] Initial GPS location unavailable:',
-          error
-        );
-
-        if (error.code === 1) {
-          setLocationError(
-            'Location permission denied. Allow location access to use your current GPS location.'
-          );
+          lng: longitude
         }
-      },
+      }));
+    };
+
+    const onLocationError = (error) => {
+      console.warn('[RAASTA] Mobile GPS watch warning:', error);
+      if (error.code === 1) {
+        setLocationError(
+          'Location permission denied. Allow location access to center on your current position.'
+        );
+      }
+    };
+
+    const watchId = navigator.geolocation.watchPosition(
+      onLocationSuccess,
+      onLocationError,
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
+        timeout: 30000,
+        maximumAge: 2000
       }
     );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
   }, []);
 
   const watchIdRef = useRef(null);

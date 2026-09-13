@@ -175,16 +175,14 @@ export default function MapPage() {
   const [hasSelectedMapDestination, setHasSelectedMapDestination] = useState(false);
   const [hasCalculatedRoute, setHasCalculatedRoute] = useState(false);
 
-  // Prefer the latest real browser/mobile GPS position over the old
-  // configured/demo origin. This keeps the map and route start aligned.
-  const startLat =
-    userLocation?.lat != null
-      ? Number(userLocation.lat)
-      : (origin?.coordinates?.lat || 15.4910);
-  const startLng =
-    userLocation?.lng != null
-      ? Number(userLocation.lng)
-      : (origin?.coordinates?.lng || 73.8260);
+  // Only treat location as real if acquired from device GPS or stored real fix
+  const hasRealGps = userLocation?.lat != null && userLocation?.lng != null;
+  const startLat = hasRealGps
+    ? Number(userLocation.lat)
+    : (origin?.coordinates?.lat ?? 15.3990);
+  const startLng = hasRealGps
+    ? Number(userLocation.lng)
+    : (origin?.coordinates?.lng ?? 73.8115);
   const destLat = destination?.coordinates?.lat;
   const destLng = destination?.coordinates?.lng;
 
@@ -371,20 +369,22 @@ export default function MapPage() {
             />
           )}
 
-          {/* User Current Location Marker — Always anchored at user's real position */}
-          <Marker
-            position={[startLat, startLng]}
-            icon={userLiveIcon}
-          >
-            <Popup>
-              <div className="text-xs font-bold text-slate-900">
-                <div>📍 Your Location</div>
-                <div className="text-[10px] text-slate-600 font-normal">
-                  {userLocation ? 'Live GPS Connected' : 'Starting Position'}
+          {/* User Current Location Marker — ONLY rendered when real GPS position is confirmed */}
+          {hasRealGps && (
+            <Marker
+              position={[Number(userLocation.lat), Number(userLocation.lng)]}
+              icon={userLiveIcon}
+            >
+              <Popup>
+                <div className="text-xs font-bold text-slate-900">
+                  <div>📍 Your Location</div>
+                  <div className="text-[10px] text-slate-600 font-normal">
+                    Live Mobile GPS Connected
+                  </div>
                 </div>
-              </div>
-            </Popup>
-          </Marker>
+              </Popup>
+            </Marker>
+          )}
 
           {/* Destination Marker */}
           {hasSelectedMapDestination && destLat != null && destLng != null && (
