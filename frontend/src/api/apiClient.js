@@ -83,6 +83,24 @@ export async function fetchBlockages() {
   }
 }
 
+export async function fetchLiveIncidents({ lat, lon, radius = 5000 } = {}) {
+  const queryLat = lat !== undefined ? Number(lat) : 15.4900;
+  const queryLon = lon !== undefined ? Number(lon) : 73.8270;
+  const queryRadius = radius !== undefined ? Number(radius) : 5000;
+
+  try {
+    const data = await resilientFetch(
+      `/live-incidents?lat=${queryLat}&lon=${queryLon}&radius=${queryRadius}`,
+      { headers: { Accept: 'application/json' } },
+      5000
+    );
+    return data?.incidents || [];
+  } catch (err) {
+    console.warn('[RAASTA API] Failed to fetch live incidents:', err?.message || err);
+    return [];
+  }
+}
+
 async function fetchDirectOsrmRoute(startLat, startLng, destLat, destLng) {
   try {
     const url = `https://router.project-osrm.org/route/v1/walking/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson&steps=true`;

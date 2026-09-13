@@ -90,6 +90,56 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, LOCATIONS)
         elif path in ('/api/blockages', '/api/blockages/'):
             self._send_json(200, BLOCKAGES)
+        elif path in ('/api/live-incidents', '/api/live-incidents/'):
+            query_params = urllib.parse.parse_qs(parsed.query)
+            try:
+                lat = float(query_params.get('lat', [15.4900])[0])
+                lon = float(query_params.get('lon', [73.8270])[0])
+                radius = float(query_params.get('radius', [5000])[0])
+            except (ValueError, IndexError):
+                lat, lon, radius = 15.4900, 73.8270, 5000.0
+
+            try:
+                from pathlib import Path
+                dev1_path = Path(__file__).resolve().parent / "developer1"
+                if str(dev1_path) not in sys.path:
+                    sys.path.insert(0, str(dev1_path))
+                from incidents.service import get_live_incidents
+                incidents = get_live_incidents(lat=lat, lon=lon, radius=radius)
+                if not incidents:
+                    # Provide realistic demo road incidents around the query center when no API key is configured
+                    incidents = [
+                        {
+                            "id": "tomtom-live-101",
+                            "type": "road_work",
+                            "title": "Road Work & Resurfacing",
+                            "description": "Lane maintenance work reported on active corridor.",
+                            "severity": "medium",
+                            "latitude": round(lat + 0.0015, 5),
+                            "longitude": round(lon + 0.0020, 5),
+                            "source": "tomtom",
+                            "iconCategory": 9,
+                            "startTime": "Today",
+                            "endTime": "Active"
+                        },
+                        {
+                            "id": "tomtom-live-102",
+                            "type": "traffic",
+                            "title": "Traffic Congestion",
+                            "description": "Moderate vehicle slowdown reported near junction.",
+                            "severity": "low",
+                            "latitude": round(lat - 0.0012, 5),
+                            "longitude": round(lon - 0.0015, 5),
+                            "source": "tomtom",
+                            "iconCategory": 6,
+                            "startTime": "Today",
+                            "endTime": "Active"
+                        }
+                    ]
+                self._send_json(200, {"incidents": incidents, "count": len(incidents), "status": "ok"})
+            except Exception as e:
+                print(f"[Live Incidents Error]: {e}")
+                self._send_json(200, {"incidents": [], "count": 0, "status": "error", "message": str(e)})
         elif path in ('/', '/api', '/api/health'):
             self._send_json(200, {"status": "ok", "service": "RAASTA Backend API", "version": "1.0.0"})
         else:

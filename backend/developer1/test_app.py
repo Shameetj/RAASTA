@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine
 from blockages.router import router as blockage_router
 from routes.router import router as routes_router
+from incidents.router import router as incidents_router
 
 
 # Create database tables
@@ -28,6 +29,7 @@ app.add_middleware(
 # Include API routers
 app.include_router(blockage_router)
 app.include_router(routes_router)
+app.include_router(incidents_router)
 
 
 @app.get("/")

@@ -11,6 +11,7 @@ import {
 } from 'react-leaflet';
 import L from 'leaflet';
 import { normalizeCoordinatesList } from '../utils/geoUtils';
+import { fetchLiveIncidents } from '../api/apiClient';
 import {
   Play,
   Square,
@@ -195,6 +196,7 @@ export default function MapPage() {
 
   const [hasSelectedMapDestination, setHasSelectedMapDestination] = useState(false);
   const [hasCalculatedRoute, setHasCalculatedRoute] = useState(false);
+  const [liveIncidents, setLiveIncidents] = useState([]);
 
   // Only treat location as real if acquired from device GPS or stored real fix
   const hasRealGps = userLocation?.lat != null && userLocation?.lng != null;
@@ -206,6 +208,33 @@ export default function MapPage() {
     : (origin?.coordinates?.lng ?? 73.8115);
   const destLat = destination?.coordinates?.lat;
   const destLng = destination?.coordinates?.lng;
+
+  // Fetch live road incidents periodically (does NOT trigger route recalculation)
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadIncidents = async () => {
+      try {
+        const incidents = await fetchLiveIncidents({
+          lat: startLat,
+          lon: startLng,
+          radius: 5000
+        });
+        if (isMounted && Array.isArray(incidents)) {
+          setLiveIncidents(incidents);
+        }
+      } catch (err) {
+        console.warn('[RAASTA] Live incidents fetch warning:', err);
+      }
+    };
+
+    loadIncidents();
+    const interval = setInterval(loadIncidents, 50000); // 50s refresh
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [Math.round(startLat * 100), Math.round(startLng * 100)]);
 
   // Only show a route AFTER user presses Start Guidance and calculation completes.
   const accessibleRouteCoords = hasSelectedMapDestination &&
@@ -274,6 +303,45 @@ export default function MapPage() {
     </div>`,
     [32, 32]
   );
+
+  // Live Incident Marker — Amber/Orange diamond badge distinct from community report
+  const getLiveIncidentIcon = (type) => {
+    let iconEmoji = '⚠️';
+    let bgGradient = 'linear-gradient(135deg, #f59e0b, #d97706)';
+    if (type === 'road_closure') {
+      iconEmoji = '⛔';
+      bgGradient = 'linear-gradient(135deg, #ef4444, #b91c1c)';
+    } else if (type === 'accident') {
+      iconEmoji = '💥';
+      bgGradient = 'linear-gradient(135deg, #ea580c, #c2410c)';
+    } else if (type === 'road_work') {
+      iconEmoji = '🚧';
+      bgGradient = 'linear-gradient(135deg, #f59e0b, #b45309)';
+    } else if (type === 'traffic') {
+      iconEmoji = '🚗';
+      bgGradient = 'linear-gradient(135deg, #f59e0b, #d97706)';
+    }
+
+    return createDivIcon(
+      `<div style="
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        background: ${bgGradient};
+        border: 2px solid #ffffff;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: rotate(45deg);
+      ">
+        <div style="transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; font-size: 13px;">
+          ${iconEmoji}
+        </div>
+      </div>`,
+      [28, 28]
+    );
+  };
 
   const handleMapDestinationSelect = ({ lat, lng }) => {
     // Lock the destination while guidance is active.
@@ -397,9 +465,9 @@ export default function MapPage() {
               icon={userLiveIcon}
             >
               <Popup>
-                <div className="text-xs font-bold text-slate-900">
+                <div className="text-xs font-bold text-white">
                   <div>📍 Your Location</div>
-                  <div className="text-[10px] text-slate-600 font-normal">
+                  <div className="text-[10px] text-slate-300 font-normal mt-0.5">
                     Live Mobile GPS Connected
                   </div>
                 </div>
@@ -411,9 +479,9 @@ export default function MapPage() {
           {hasSelectedMapDestination && destLat != null && destLng != null && (
             <Marker position={[destLat, destLng]} icon={destIcon}>
               <Popup>
-                <div className="text-xs font-bold text-slate-900">
+                <div className="text-xs font-bold text-white">
                   <div>🎯 {destination.name}</div>
-                  <div className="text-[10px] text-slate-600 font-normal">{destination.address}</div>
+                  <div className="text-[10px] text-slate-300 font-normal mt-0.5">{destination.address}</div>
                 </div>
               </Popup>
             </Marker>
@@ -428,13 +496,13 @@ export default function MapPage() {
             return (
               <Marker key={b.id || `barrier-${idx}`} position={[bLat, bLng]} icon={obstacleIcon}>
                 <Popup>
-                  <div className="p-1 text-slate-900">
-                    <div className="text-xs font-bold flex items-center gap-1">
+                  <div className="p-1 text-white min-w-[190px]">
+                    <div className="text-xs font-bold flex items-center gap-1.5 text-white">
                       <span>⚠️</span>
                       <span>{b.title || 'Reported Obstacle'}</span>
                     </div>
-                    <div className="text-[11px] text-slate-700 mt-0.5">{b.description || 'Stairs blocking sidewalk'}</div>
-                    <div className="text-[10px] font-semibold text-rose-600 mt-1 uppercase">
+                    <div className="text-[11px] text-slate-300 mt-1 leading-snug">{b.description || 'Stairs blocking sidewalk'}</div>
+                    <div className="text-[10px] font-bold text-rose-400 mt-2 uppercase tracking-wider">
                       Severity: {b.severity || 'High'}
                     </div>
 
@@ -463,7 +531,71 @@ export default function MapPage() {
             );
           })}
 
+          {/* Live Road Incidents (TomTom Traffic Feed - Visual Only) */}
+          {liveIncidents.map((inc, idx) => {
+            const incLat = Number(inc.latitude);
+            const incLng = Number(inc.longitude);
+            if (isNaN(incLat) || isNaN(incLng)) return null;
+
+            return (
+              <Marker
+                key={inc.id || `live-inc-${idx}`}
+                position={[incLat, incLng]}
+                icon={getLiveIncidentIcon(inc.type)}
+              >
+                <Popup>
+                  <div className="p-1 min-w-[210px] text-white">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-700/80 pb-1.5 mb-2">
+                      <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                        Live Incident
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-medium">TomTom Feed</span>
+                    </div>
+
+                    <div className="text-xs font-extrabold text-white mb-1">
+                      {inc.title || 'Traffic Event'}
+                    </div>
+
+                    <div className="text-[11px] text-slate-300 leading-relaxed mb-2.5">
+                      {inc.description || 'Live road condition reported in your area.'}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] bg-slate-800/80 rounded-lg p-1.5 border border-slate-700/80">
+                      <span className="text-slate-400">Severity:</span>
+                      <span className={`font-bold uppercase tracking-wider ${
+                        inc.severity === 'high' ? 'text-rose-400' :
+                        inc.severity === 'medium' ? 'text-amber-400' : 'text-blue-400'
+                      }`}>
+                        {inc.severity || 'Moderate'}
+                      </span>
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+
         </MapContainer>
+
+        {/* Map Legend: Community Reports vs Live Traffic Incidents */}
+        <div className="absolute top-3 right-3 z-[500] pointer-events-auto bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-xl flex items-center gap-2.5 text-[10px] font-medium text-slate-200">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-600 border border-white inline-block"></span>
+            <span>Community</span>
+          </div>
+          <div className="w-px h-3 bg-slate-700"></div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rotate-45 rounded-[2px] bg-amber-500 border border-white inline-block"></span>
+            <span>Live Incident</span>
+          </div>
+          {liveIncidents.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 font-bold text-[9px]">
+              {liveIncidents.length}
+            </span>
+          )}
+        </div>
+
         {/* Loading Overlay */}
         {isCalculatingRoute && (
           <div className="absolute top-3 left-3 right-3 z-[1000] p-3 rounded-xl bg-slate-900/95 border border-emerald-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
