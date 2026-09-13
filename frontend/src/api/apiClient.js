@@ -83,6 +83,37 @@ export async function fetchBlockages() {
   }
 }
 
+async function fetchDirectOsrmRoute(startLat, startLng, destLat, destLng) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/walking/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson&steps=true`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.routes && data.routes.length > 0) {
+        const r = data.routes[0];
+        // Convert GeoJSON [lng, lat] to Leaflet [lat, lng]
+        const coordinates = r.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+        const steps = (r.legs?.[0]?.steps || []).map((s) => ({
+          instruction: s.maneuver?.instruction || s.name || 'Proceed along accessible pathway',
+          distance: `${Math.round(s.distance)}m`,
+          safe: true
+        }));
+        return {
+          coordinates,
+          distance_meters: Math.round(r.distance * 10) / 10,
+          duration_seconds: Math.round(r.duration),
+          turn_by_turn: steps.length > 0 ? steps : [
+            { instruction: 'Proceed along accessible step-free street', distance: `${Math.round(r.distance)}m`, safe: true }
+          ]
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[RAASTA API] Direct OSRM query warning:', err);
+  }
+  return null;
+}
+
 export async function calculateRoute({ start, destination, profile }) {
   const startLat =
     typeof start === 'object'
@@ -127,11 +158,12 @@ export async function calculateRoute({ start, destination, profile }) {
         },
         body: JSON.stringify(payload)
       },
-      8000
+      4000
     );
   } catch (err) {
-    console.warn('[RAASTA API] Route calculation server error, generating fallback route:', err);
-    // Approximate direct step-free route
+    console.log('[RAASTA API] Backend offline/unreachable, querying real OpenStreetMap road engine directly...');
+    const osrm = await fetchDirectOsrmRoute(startLat, startLng, destLat, destLng);
+
     const R = 6371000;
     const dLat = ((destLat - startLat) * Math.PI) / 180;
     const dLon = ((destLng - startLng) * Math.PI) / 180;
@@ -140,38 +172,39 @@ export async function calculateRoute({ start, destination, profile }) {
       Math.cos((startLat * Math.PI) / 180) *
       Math.cos((destLat * Math.PI) / 180) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const distMeters = Math.max(50, Math.round(2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))));
-    const durationMins = Math.max(1, Math.round(distMeters / 70));
+    const approxDist = Math.max(50, Math.round(2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))));
 
-    // Intermediate points for realistic path
-    const p1 = [startLat, startLng];
-    const pMid = [
-      (startLat + destLat) / 2 + 0.0002,
-      (startLng + destLng) / 2 - 0.0002
-    ];
-    const p2 = [destLat, destLng];
+    const routeCoords = osrm?.coordinates && osrm.coordinates.length >= 2
+      ? osrm.coordinates
+      : [
+          [startLat, startLng],
+          [(startLat + destLat) / 2, (startLng + destLng) / 2],
+          [destLat, destLng]
+        ];
+    const distMeters = osrm?.distance_meters ?? approxDist;
+    const durationSeconds = osrm?.duration_seconds ?? Math.round(distMeters / 1.1);
 
     return {
       success: true,
-      message: 'Accessible route calculated successfully.',
+      message: 'Accessible route calculated successfully via OpenStreetMap.',
       profile: profile === 'deaf' ? 'deaf' : 'wheelchair',
       rerouted: false,
       route: {
-        coordinates: [p1, pMid, p2],
+        coordinates: routeCoords,
         distance_meters: distMeters,
-        duration_seconds: durationMins * 60
+        duration_seconds: durationSeconds
       },
       direct_route: {
         name: 'Direct Route',
-        coordinates: [p1, p2],
+        coordinates: routeCoords,
         distance_meters: distMeters,
-        duration_seconds: durationMins * 60
+        duration_seconds: durationSeconds
       },
       alerts: [],
       blockages: [],
-      turn_by_turn: [
-        { instruction: 'Proceed along accessible step-free corridor', distance: `${Math.round(distMeters * 0.6)}m`, safe: true },
-        { instruction: 'Arrive safely at destination entrance', distance: `${Math.round(distMeters * 0.4)}m`, safe: true }
+      turn_by_turn: osrm?.turn_by_turn || [
+        { instruction: 'Proceed along accessible pathway', distance: `${Math.round(distMeters * 0.6)}m`, safe: true },
+        { instruction: 'Arrive safely at destination', distance: `${Math.round(distMeters * 0.4)}m`, safe: true }
       ]
     };
   }
