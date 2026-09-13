@@ -110,7 +110,7 @@ def extract_incident_coordinates(geometry: Dict[str, Any]) -> tuple:
     return None, None
 
 
-def get_live_incidents(lat: float, lon: float, radius: float = 5000.0) -> List[Dict[str, Any]]:
+def get_live_incidents(lat: float, lon: float, radius: float = 5000.0, limit: int = 20) -> List[Dict[str, Any]]:
     """
     Fetches live road traffic incidents from TomTom Traffic Incident API.
     Returns normalized RAASTA incidents list.
@@ -199,7 +199,7 @@ def get_live_incidents(lat: float, lon: float, radius: float = 5000.0) -> List[D
             })
 
         _INCIDENT_CACHE[cache_key] = (now, normalized_incidents)
-        return normalized_incidents
+        return normalized_incidents[:limit]
 
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, Exception) as exc:
         print(f"[TomTom Incident Service Warning]: {exc}")

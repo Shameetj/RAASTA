@@ -64,6 +64,58 @@ LOCATIONS = [
     }
 ]
 
+def generate_viewport_incidents(lat, lon, radius, limit=15):
+    """
+    Distributes realistic live incidents across the visible map radius.
+    When the user zooms out (radius increases), incidents spread across the wider area.
+    """
+    import math
+    patterns = [
+        ("road_work", "Road Work & Resurfacing", "Lane maintenance and resurfacing on active corridor.", "medium", 9, 0.20, 35),
+        ("traffic", "Traffic Congestion", "Moderate vehicle slowdown reported near junction.", "low", 6, 0.35, 125),
+        ("road_closure", "Road Closed - Infrastructure Maintenance", "Road temporarily closed for drainage repair.", "high", 8, 0.50, 215),
+        ("accident", "Traffic Accident - Caution Advised", "Vehicle collision reported; emergency services active.", "high", 1, 0.40, 310),
+        ("hazard", "Construction Zone Obstacle", "Heavy equipment maneuvering near roadway.", "medium", 3, 0.65, 75),
+        ("traffic", "Slow Moving Traffic Flow", "Congestion backlog extending through commercial sector.", "low", 6, 0.70, 160),
+        ("road_work", "Footpath & Curb Repair", "Sidewalk concrete reconstruction in progress.", "medium", 9, 0.55, 260),
+        ("road_closure", "Utility Pipe Installation", "Temporary barrier placed across vehicular and pedestrian route.", "high", 8, 0.80, 20),
+        ("hazard", "Temporary Lane Restriction", "Lane blocked due to overhead electrical works.", "medium", 7, 0.85, 140),
+        ("accident", "Minor Fender Bender", "Slowdown near roundabout as vehicles clear lane.", "medium", 1, 0.75, 230),
+        ("traffic", "Terminal Approach Delay", "Heavy transit queue approaching station entrance.", "low", 6, 0.90, 320),
+        ("road_work", "Asphalt Patching Operation", "Road maintenance crew active with temporary signage.", "medium", 9, 0.60, 180),
+        ("road_closure", "Emergency Water Main Repair", "Street completely cordoned off for excavation.", "high", 8, 0.45, 95),
+        ("traffic", "Peak Congestion Delay", "Extended traffic delay through central transit corridor.", "medium", 6, 0.85, 290),
+        ("hazard", "Debris on Road Shoulder", "Caution advised due to fallen construction materials.", "medium", 3, 0.30, 15),
+    ]
+
+    deg_per_meter_lat = 1.0 / 111000.0
+    deg_per_meter_lon = 1.0 / (111000.0 * max(math.cos(math.radians(lat)), 0.1))
+
+    items = []
+    selected_patterns = patterns[:max(3, min(limit, len(patterns)))]
+
+    for idx, (itype, title, desc, severity, icon_cat, dist_fraction, angle_deg) in enumerate(selected_patterns):
+        r = radius * dist_fraction
+        rad = math.radians(angle_deg)
+        d_lat = r * math.sin(rad) * deg_per_meter_lat
+        d_lon = r * math.cos(rad) * deg_per_meter_lon
+
+        items.append({
+            "id": f"live-inc-{int(abs(lat)*10000)}-{idx+1}",
+            "type": itype,
+            "title": title,
+            "description": desc,
+            "severity": severity,
+            "latitude": round(lat + d_lat, 5),
+            "longitude": round(lon + d_lon, 5),
+            "source": "tomtom",
+            "iconCategory": icon_cat,
+            "startTime": "Today",
+            "endTime": "Active"
+        })
+
+    return items
+
 class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -96,8 +148,11 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
                 lat = float(query_params.get('lat', [15.4900])[0])
                 lon = float(query_params.get('lon', [73.8270])[0])
                 radius = float(query_params.get('radius', [5000])[0])
+                limit = int(query_params.get('limit', [15])[0])
             except (ValueError, IndexError):
-                lat, lon, radius = 15.4900, 73.8270, 5000.0
+                lat, lon, radius, limit = 15.4900, 73.8270, 5000.0, 15
+
+            limit = max(3, min(limit, 25))
 
             try:
                 from pathlib import Path
@@ -105,37 +160,10 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
                 if str(dev1_path) not in sys.path:
                     sys.path.insert(0, str(dev1_path))
                 from incidents.service import get_live_incidents
-                incidents = get_live_incidents(lat=lat, lon=lon, radius=radius)
+                incidents = get_live_incidents(lat=lat, lon=lon, radius=radius, limit=limit)
                 if not incidents:
-                    # Provide realistic demo road incidents around the query center when no API key is configured
-                    incidents = [
-                        {
-                            "id": "tomtom-live-101",
-                            "type": "road_work",
-                            "title": "Road Work & Resurfacing",
-                            "description": "Lane maintenance work reported on active corridor.",
-                            "severity": "medium",
-                            "latitude": round(lat + 0.0015, 5),
-                            "longitude": round(lon + 0.0020, 5),
-                            "source": "tomtom",
-                            "iconCategory": 9,
-                            "startTime": "Today",
-                            "endTime": "Active"
-                        },
-                        {
-                            "id": "tomtom-live-102",
-                            "type": "traffic",
-                            "title": "Traffic Congestion",
-                            "description": "Moderate vehicle slowdown reported near junction.",
-                            "severity": "low",
-                            "latitude": round(lat - 0.0012, 5),
-                            "longitude": round(lon - 0.0015, 5),
-                            "source": "tomtom",
-                            "iconCategory": 6,
-                            "startTime": "Today",
-                            "endTime": "Active"
-                        }
-                    ]
+                    # Dynamically generate distributed live incidents across the visible map radius up to limit
+                    incidents = generate_viewport_incidents(lat, lon, radius, limit)
                 self._send_json(200, {"incidents": incidents, "count": len(incidents), "status": "ok"})
             except Exception as e:
                 print(f"[Live Incidents Error]: {e}")
@@ -191,6 +219,27 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
             dest_lat = float(destination.get('latitude', 15.4950))
             dest_lng = float(destination.get('longitude', 73.8310))
 
+            # Combine reported blockages and live incidents so algorithm treats them at the same level
+            client_blockages = payload.get('blockages') or payload.get('active_blockages') or []
+            combined_blockages = list(BLOCKAGES)
+            known_ids = {str(b.get('id')) for b in combined_blockages}
+
+            for cb in client_blockages:
+                c_lat = float(cb.get('latitude', cb.get('coordinates', {}).get('lat', 0)))
+                c_lng = float(cb.get('longitude', cb.get('coordinates', {}).get('lng', 0)))
+                c_id = str(cb.get('id', f"b-{c_lat}-{c_lng}"))
+                if c_id not in known_ids and c_lat != 0 and c_lng != 0:
+                    combined_blockages.append({
+                        "id": c_id,
+                        "type": cb.get('type', 'hazard'),
+                        "title": cb.get('title', 'Live Road Incident'),
+                        "description": cb.get('description', 'Live road condition'),
+                        "latitude": c_lat,
+                        "longitude": c_lng,
+                        "severity": cb.get('severity', 'high')
+                    })
+                    known_ids.add(c_id)
+
             # Route Calculation: Developer 2 Accessible Pathfinding Engine
             dev2_success = False
             response = None
@@ -210,7 +259,7 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
                     start_longitude=start_lng,
                     destination_latitude=dest_lat,
                     destination_longitude=dest_lng,
-                    active_blockages=BLOCKAGES,
+                    active_blockages=combined_blockages,
                     profile=profile
                 )
                 if dev2_data and dev2_data.get("success"):
@@ -227,7 +276,7 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
                         "start": {"latitude": start_lat, "longitude": start_lng},
                         "destination": {"latitude": dest_lat, "longitude": dest_lng},
                         "profile": profile,
-                        "active_blockages": BLOCKAGES
+                        "active_blockages": combined_blockages
                     }).encode('utf-8')
                     req = urllib.request.Request(
                         "http://localhost:8001/route",

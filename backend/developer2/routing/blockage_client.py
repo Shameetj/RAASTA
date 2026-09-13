@@ -1,7 +1,8 @@
+import os
 import requests
 
 
-DEFAULT_BACKEND_URL = "http://26.110.10.242:8000"
+DEFAULT_BACKEND_URL = os.getenv("DEV1_API_URL", "http://127.0.0.1:8000")
 
 
 def get_active_blockages(

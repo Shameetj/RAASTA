@@ -41,7 +41,7 @@ def point_to_route_distance(
 def find_blockages_on_route(
     route_coordinates,
     blockages,
-    threshold_meters=30,
+    threshold_meters=45,
     ignored_blockage_ids=None,
 ):
     """

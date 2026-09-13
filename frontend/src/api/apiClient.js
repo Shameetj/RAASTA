@@ -80,16 +80,17 @@ export async function fetchBlockages() {
   }
 }
 
-export async function fetchLiveIncidents({ lat, lon, radius = 5000 } = {}) {
+export async function fetchLiveIncidents({ lat, lon, radius = 5000, limit = 15 } = {}) {
   const queryLat = lat !== undefined ? Number(lat) : 15.4900;
   const queryLon = lon !== undefined ? Number(lon) : 73.8270;
   const queryRadius = radius !== undefined ? Number(radius) : 5000;
+  const queryLimit = limit !== undefined ? Number(limit) : 15;
 
   try {
     const data = await resilientFetch(
-      `/live-incidents?lat=${queryLat}&lon=${queryLon}&radius=${queryRadius}`,
+      `/live-incidents?lat=${queryLat}&lon=${queryLon}&radius=${queryRadius}&limit=${queryLimit}`,
       { headers: { Accept: 'application/json' } },
-      5000
+      4000
     );
     return data?.incidents || [];
   } catch (err) {
@@ -129,7 +130,7 @@ async function fetchDirectOsrmRoute(startLat, startLng, destLat, destLng) {
   return null;
 }
 
-export async function calculateRoute({ start, destination, profile }) {
+export async function calculateRoute({ start, destination, profile, blockages = [] }) {
   const startLat =
     typeof start === 'object'
       ? Number(start.latitude ?? start.lat)
@@ -159,7 +160,8 @@ export async function calculateRoute({ start, destination, profile }) {
       latitude: destLat,
       longitude: destLng
     },
-    profile: profile === 'deaf' ? 'deaf' : 'wheelchair'
+    profile: profile === 'deaf' ? 'deaf' : 'wheelchair',
+    blockages
   };
 
   try {

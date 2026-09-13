@@ -202,7 +202,8 @@ export function NavigationProvider({ children }) {
   const requestRouteCalculation = async (
     targetDest = destination,
     profileId = selectedProfileId,
-    startOverride = null
+    startOverride = null,
+    extraBlockages = []
   ) => {
     setIsCalculatingRoute(true);
     try {
@@ -212,10 +213,17 @@ export function NavigationProvider({ children }) {
       const destLat = targetDest.coordinates?.lat ?? 15.4950;
       const destLng = targetDest.coordinates?.lng ?? 73.8310;
 
+      // Unify community reported blockages and live road incidents at the same level
+      const unifiedBlockages = [
+        ...barriers,
+        ...(Array.isArray(extraBlockages) ? extraBlockages : [])
+      ];
+
       const result = await calculateRoute({
         start: { latitude: Number(startLat), longitude: Number(startLng) },
         destination: { latitude: Number(destLat), longitude: Number(destLng) },
-        profile: profileId === 'deaf' ? 'deaf' : 'wheelchair'
+        profile: profileId === 'deaf' ? 'deaf' : 'wheelchair',
+        blockages: unifiedBlockages
       });
 
       if (result) {

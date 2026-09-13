@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import {
   MapContainer,
@@ -119,6 +119,37 @@ function DestinationMapPicker({ onSelect }) {
   return null;
 }
 
+// Dynamically listens to map pan & zoom changes to load live incidents across visible viewport
+function MapViewportWatcher({ onViewportChange }) {
+  const map = useMap();
+  const timeoutRef = useRef(null);
+
+  useMapEvents({
+    moveend() {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        try {
+          const center = map.getCenter();
+          const bounds = map.getBounds();
+          const northEast = bounds.getNorthEast();
+          const radius = Math.round(center.distanceTo(northEast));
+          const zoom = map.getZoom();
+          onViewportChange({
+            lat: center.lat,
+            lng: center.lng,
+            radius: Math.max(800, Math.min(radius, 35000)),
+            zoom
+          });
+        } catch (e) {
+          console.warn('[MapViewportWatcher] Viewport calculation notice:', e);
+        }
+      }, 350);
+    }
+  });
+
+  return null;
+}
+
 // Fits map bounds smoothly only after the user starts guidance and a route is calculated
 function RouteBoundsFitter({ currentCoords, destCoords, accessibleCoords, hasCalculatedRoute }) {
   const map = useMap();
@@ -209,32 +240,45 @@ export default function MapPage() {
   const destLat = destination?.coordinates?.lat;
   const destLng = destination?.coordinates?.lng;
 
-  // Fetch live road incidents periodically (does NOT trigger route recalculation)
-  useEffect(() => {
-    let isMounted = true;
+  const currentViewportRef = useRef({
+    lat: startLat,
+    lon: startLng,
+    radius: 5000,
+    limit: 15
+  });
 
-    const loadIncidents = async () => {
-      try {
-        const incidents = await fetchLiveIncidents({
-          lat: startLat,
-          lon: startLng,
-          radius: 5000
-        });
-        if (isMounted && Array.isArray(incidents)) {
-          setLiveIncidents(incidents);
-        }
-      } catch (err) {
-        console.warn('[RAASTA] Live incidents fetch warning:', err);
+  const loadIncidents = useCallback(async ({ lat, lon, radius, limit = 15 }) => {
+    try {
+      const incidents = await fetchLiveIncidents({
+        lat,
+        lon,
+        radius,
+        limit
+      });
+      if (Array.isArray(incidents)) {
+        setLiveIncidents(incidents);
       }
-    };
+    } catch (err) {
+      console.warn('[RAASTA] Live incidents fetch warning:', err);
+    }
+  }, []);
 
-    loadIncidents();
-    const interval = setInterval(loadIncidents, 50000); // 50s refresh
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [Math.round(startLat * 100), Math.round(startLng * 100)]);
+  // Update incidents dynamically whenever user pans or zooms the map
+  const handleViewportChange = useCallback(({ lat, lng, radius, zoom }) => {
+    // Limit is capped: 10 when zoomed in on street level, 15 at city level, 20 when zoomed out
+    const limit = zoom <= 13 ? 20 : (zoom <= 15 ? 15 : 10);
+    currentViewportRef.current = { lat, lon: lng, radius, limit };
+    loadIncidents({ lat, lon: lng, radius, limit });
+  }, [loadIncidents]);
+
+  // Periodic refresh (every 45s) using active viewport
+  useEffect(() => {
+    loadIncidents(currentViewportRef.current);
+    const interval = setInterval(() => {
+      loadIncidents(currentViewportRef.current);
+    }, 45000);
+    return () => clearInterval(interval);
+  }, [loadIncidents, startLat, startLng]);
 
   // Only show a route AFTER user presses Start Guidance and calculation completes.
   const accessibleRouteCoords = hasSelectedMapDestination &&
@@ -411,6 +455,11 @@ export default function MapPage() {
 
           <DestinationMapPicker
             onSelect={handleMapDestinationSelect}
+          />
+
+          {/* Dynamic pan & zoom watcher to fetch live incidents */}
+          <MapViewportWatcher
+            onViewportChange={handleViewportChange}
           />
 
           {/* Map resizer to ensure tiles render immediately */}
@@ -682,7 +731,8 @@ export default function MapPage() {
                     await requestRouteCalculation(
                       destination,
                       selectedProfileId,
-                      realGpsStart
+                      realGpsStart,
+                      liveIncidents
                     );
                     setHasCalculatedRoute(true);
                     startGpsGuidance();
