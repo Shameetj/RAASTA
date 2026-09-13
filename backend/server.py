@@ -64,58 +64,6 @@ LOCATIONS = [
     }
 ]
 
-def generate_viewport_incidents(lat, lon, radius, limit=15):
-    """
-    Distributes realistic live incidents across the visible map radius.
-    When the user zooms out (radius increases), incidents spread across the wider area.
-    """
-    import math
-    patterns = [
-        ("road_work", "Road Work & Resurfacing", "Lane maintenance and resurfacing on active corridor.", "medium", 9, 0.20, 35),
-        ("traffic", "Traffic Congestion", "Moderate vehicle slowdown reported near junction.", "low", 6, 0.35, 125),
-        ("road_closure", "Road Closed - Infrastructure Maintenance", "Road temporarily closed for drainage repair.", "high", 8, 0.50, 215),
-        ("accident", "Traffic Accident - Caution Advised", "Vehicle collision reported; emergency services active.", "high", 1, 0.40, 310),
-        ("hazard", "Construction Zone Obstacle", "Heavy equipment maneuvering near roadway.", "medium", 3, 0.65, 75),
-        ("traffic", "Slow Moving Traffic Flow", "Congestion backlog extending through commercial sector.", "low", 6, 0.70, 160),
-        ("road_work", "Footpath & Curb Repair", "Sidewalk concrete reconstruction in progress.", "medium", 9, 0.55, 260),
-        ("road_closure", "Utility Pipe Installation", "Temporary barrier placed across vehicular and pedestrian route.", "high", 8, 0.80, 20),
-        ("hazard", "Temporary Lane Restriction", "Lane blocked due to overhead electrical works.", "medium", 7, 0.85, 140),
-        ("accident", "Minor Fender Bender", "Slowdown near roundabout as vehicles clear lane.", "medium", 1, 0.75, 230),
-        ("traffic", "Terminal Approach Delay", "Heavy transit queue approaching station entrance.", "low", 6, 0.90, 320),
-        ("road_work", "Asphalt Patching Operation", "Road maintenance crew active with temporary signage.", "medium", 9, 0.60, 180),
-        ("road_closure", "Emergency Water Main Repair", "Street completely cordoned off for excavation.", "high", 8, 0.45, 95),
-        ("traffic", "Peak Congestion Delay", "Extended traffic delay through central transit corridor.", "medium", 6, 0.85, 290),
-        ("hazard", "Debris on Road Shoulder", "Caution advised due to fallen construction materials.", "medium", 3, 0.30, 15),
-    ]
-
-    deg_per_meter_lat = 1.0 / 111000.0
-    deg_per_meter_lon = 1.0 / (111000.0 * max(math.cos(math.radians(lat)), 0.1))
-
-    items = []
-    selected_patterns = patterns[:max(3, min(limit, len(patterns)))]
-
-    for idx, (itype, title, desc, severity, icon_cat, dist_fraction, angle_deg) in enumerate(selected_patterns):
-        r = radius * dist_fraction
-        rad = math.radians(angle_deg)
-        d_lat = r * math.sin(rad) * deg_per_meter_lat
-        d_lon = r * math.cos(rad) * deg_per_meter_lon
-
-        items.append({
-            "id": f"live-inc-{int(abs(lat)*10000)}-{idx+1}",
-            "type": itype,
-            "title": title,
-            "description": desc,
-            "severity": severity,
-            "latitude": round(lat + d_lat, 5),
-            "longitude": round(lon + d_lon, 5),
-            "source": "tomtom",
-            "iconCategory": icon_cat,
-            "startTime": "Today",
-            "endTime": "Active"
-        })
-
-    return items
-
 class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -161,9 +109,6 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
                     sys.path.insert(0, str(dev1_path))
                 from incidents.service import get_live_incidents
                 incidents = get_live_incidents(lat=lat, lon=lon, radius=radius, limit=limit)
-                if not incidents:
-                    # Dynamically generate distributed live incidents across the visible map radius up to limit
-                    incidents = generate_viewport_incidents(lat, lon, radius, limit)
                 self._send_json(200, {"incidents": incidents, "count": len(incidents), "status": "ok"})
             except Exception as e:
                 print(f"[Live Incidents Error]: {e}")

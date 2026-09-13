@@ -62,53 +62,11 @@ export async function onRequestGet(context) {
   const apiKey = context.env?.TOMTOM_API_KEY || '';
 
   if (!apiKey) {
-    const patterns = [
-      { type: 'road_work', title: 'Road Work & Resurfacing', desc: 'Lane maintenance and resurfacing on active corridor.', severity: 'medium', cat: 9, dist: 0.20, ang: 35 },
-      { type: 'traffic', title: 'Traffic Congestion', desc: 'Moderate vehicle slowdown reported near junction.', severity: 'low', cat: 6, dist: 0.35, ang: 125 },
-      { type: 'road_closure', title: 'Road Closed - Infrastructure Maintenance', desc: 'Road temporarily closed for drainage repair.', severity: 'high', cat: 8, dist: 0.50, ang: 215 },
-      { type: 'accident', title: 'Traffic Accident - Caution Advised', desc: 'Vehicle collision reported; emergency services active.', severity: 'high', cat: 1, dist: 0.40, ang: 310 },
-      { type: 'hazard', title: 'Construction Zone Obstacle', desc: 'Heavy equipment maneuvering near roadway.', severity: 'medium', cat: 3, dist: 0.65, ang: 75 },
-      { type: 'traffic', title: 'Slow Moving Traffic Flow', desc: 'Congestion backlog extending through commercial sector.', severity: 'low', cat: 6, dist: 0.70, ang: 160 },
-      { type: 'road_work', title: 'Footpath & Curb Repair', desc: 'Sidewalk concrete reconstruction in progress.', severity: 'medium', cat: 9, dist: 0.55, ang: 260 },
-      { type: 'road_closure', title: 'Utility Pipe Installation', desc: 'Temporary barrier placed across vehicular and pedestrian route.', severity: 'high', cat: 8, dist: 0.80, ang: 20 },
-      { type: 'hazard', title: 'Temporary Lane Restriction', desc: 'Lane blocked due to overhead electrical works.', severity: 'medium', cat: 7, dist: 0.85, ang: 140 },
-      { type: 'accident', title: 'Minor Fender Bender', desc: 'Slowdown near roundabout as vehicles clear lane.', severity: 'medium', cat: 1, dist: 0.75, ang: 230 },
-      { type: 'traffic', title: 'Terminal Approach Delay', desc: 'Heavy transit queue approaching station entrance.', severity: 'low', cat: 6, dist: 0.90, ang: 320 },
-      { type: 'road_work', title: 'Asphalt Patching Operation', desc: 'Road maintenance crew active with temporary signage.', severity: 'medium', cat: 9, dist: 0.60, ang: 180 },
-      { type: 'road_closure', title: 'Emergency Water Main Repair', desc: 'Street completely cordoned off for excavation.', severity: 'high', cat: 8, dist: 0.45, ang: 95 },
-      { type: 'traffic', title: 'Peak Congestion Delay', desc: 'Extended traffic delay through central transit corridor.', severity: 'medium', cat: 6, dist: 0.85, ang: 290 },
-      { type: 'hazard', title: 'Debris on Road Shoulder', desc: 'Caution advised due to fallen construction materials.', severity: 'medium', cat: 3, dist: 0.30, ang: 15 }
-    ];
-
-    const degLat = 1.0 / 111000.0;
-    const degLon = 1.0 / (111000.0 * Math.max(Math.cos((lat * Math.PI) / 180.0), 0.1));
-
-    const demoIncidents = patterns.slice(0, limit).map((p, idx) => {
-      const r = radius * p.dist;
-      const rad = (p.ang * Math.PI) / 180.0;
-      const dLat = r * Math.sin(rad) * degLat;
-      const dLon = r * Math.cos(rad) * degLon;
-
-      return {
-        id: `live-inc-${Math.round(Math.abs(lat) * 10000)}-${idx + 1}`,
-        type: p.type,
-        title: p.title,
-        description: p.desc,
-        severity: p.severity,
-        latitude: Number((lat + dLat).toFixed(5)),
-        longitude: Number((lon + dLon).toFixed(5)),
-        source: 'tomtom',
-        iconCategory: p.cat,
-        startTime: 'Today',
-        endTime: 'Active'
-      };
-    });
-
     return new Response(JSON.stringify({
-      incidents: demoIncidents,
-      count: demoIncidents.length,
-      status: 'demo_fallback',
-      message: 'Demo live road incidents (TomTom API key not configured on edge)'
+      incidents: [],
+      count: 0,
+      status: 'ok',
+      message: 'TomTom live incidents not configured'
     }), {
       headers: {
         'Content-Type': 'application/json',

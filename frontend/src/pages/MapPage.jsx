@@ -302,17 +302,18 @@ export default function MapPage() {
       height: 26px;
       border-radius: 50%;
       background: #06b6d4;
-      border: 3px solid white;
+      border: 3px solid #ffffff;
       box-shadow: 0 2px 10px rgba(0,0,0,0.4);
       display: flex;
       align-items: center;
       justify-content: center;
+      box-sizing: border-box;
     ">
       <div style="
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: white;
+        background: #ffffff;
       "></div>
     </div>`,
     [26, 26]
@@ -325,25 +326,37 @@ export default function MapPage() {
       height: 26px;
       border-radius: 50%;
       background: #10b981;
-      border: 3px solid white;
+      border: 3px solid #ffffff;
       box-shadow: 0 2px 10px rgba(0,0,0,0.4);
       display: flex;
       align-items: center;
       justify-content: center;
+      box-sizing: border-box;
     ">
       <div style="
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: white;
+        background: #ffffff;
       "></div>
     </div>`,
     [26, 26]
   );
 
   const obstacleIcon = createDivIcon(
-    `<div class="w-8 h-8 rounded-full bg-rose-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold">
-      ⚠️
+    `<div style="
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #e11d48;
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+    ">
+      <span style="font-size: 15px; line-height: 1; user-select: none;">⚠️</span>
     </div>`,
     [32, 32]
   );
@@ -368,22 +381,40 @@ export default function MapPage() {
 
     return createDivIcon(
       `<div style="
-        width: 28px;
-        height: 28px;
-        border-radius: 7px;
-        background: ${bgGradient};
-        border: 2px solid #ffffff;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+        width: 36px;
+        height: 36px;
         display: flex;
         align-items: center;
         justify-content: center;
-        transform: rotate(45deg);
+        box-sizing: border-box;
       ">
-        <div style="transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; font-size: 13px;">
-          ${iconEmoji}
+        <div style="
+          width: 24px;
+          height: 24px;
+          border-radius: 6px;
+          background: ${bgGradient};
+          border: 2px solid #ffffff;
+          box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transform: rotate(45deg);
+          box-sizing: border-box;
+        ">
+          <span style="
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            line-height: 1;
+            user-select: none;
+          ">
+            ${iconEmoji}
+          </span>
         </div>
       </div>`,
-      [28, 28]
+      [36, 36]
     );
   };
 
