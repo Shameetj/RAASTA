@@ -7,19 +7,16 @@
  * Dev2 may need to query OSRM multiple times.
  */
 
-// Active live backend Cloudflare tunnel
-const LIVE_TUNNEL_URL = 'https://gear-holders-obituaries-fonts.trycloudflare.com/api';
-
-// Cloudflare Pages env variable (filter out known dead render.com domain)
+// Primary API base: Relative /api connects to local backend via Vite proxy
+// and connects to Cloudflare Pages edge functions on cloud deployments.
 const ENV_URL =
   import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes('onrender.com')
     ? import.meta.env.VITE_API_URL
     : null;
 
 const CANDIDATE_URLS = [
-  LIVE_TUNNEL_URL,
-  ...(ENV_URL && ENV_URL !== LIVE_TUNNEL_URL ? [ENV_URL] : []),
-  '/api'
+  '/api',
+  ...(ENV_URL && ENV_URL !== '/api' ? [ENV_URL] : [])
 ];
 
 const SERVER_ERROR_MESSAGE =
@@ -28,7 +25,7 @@ const SERVER_ERROR_MESSAGE =
 async function resilientFetch(
   endpoint,
   options = {},
-  timeoutMs = 7000
+  timeoutMs = 3000
 ) {
   let lastError = null;
 
