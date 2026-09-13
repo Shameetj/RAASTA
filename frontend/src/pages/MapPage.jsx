@@ -48,72 +48,12 @@ function DestinationMapPicker({ onSelect }) {
   return null;
 }
 
-// Dynamically fit map bounds to route & markers
-function MapBoundsUpdater({ originCoords, destCoords, accessibleCoords, directCoords, barrierList }) {
+// Fits map bounds smoothly only after the user starts guidance and a route is calculated
+function RouteBoundsFitter({ currentCoords, destCoords, accessibleCoords, hasCalculatedRoute }) {
   const map = useMap();
 
   useEffect(() => {
-    const points = [];
-
-    if (originCoords?.lat && originCoords?.lng) {
-      points.push([originCoords.lat, originCoords.lng]);
-    }
-    if (destCoords?.lat && destCoords?.lng) {
-      points.push([destCoords.lat, destCoords.lng]);
-    }
-
-    if (accessibleCoords && Array.isArray(accessibleCoords) && accessibleCoords.length > 0) {
-      accessibleCoords.forEach(p => {
-        if (Array.isArray(p) && p.length >= 2) {
-          points.push(p);
-        }
-      });
-    }
-
-    if (directCoords && Array.isArray(directCoords) && directCoords.length > 0) {
-      directCoords.forEach(p => {
-        if (Array.isArray(p) && p.length >= 2) {
-          points.push(p);
-        }
-      });
-    }
-
-    if (barrierList && barrierList.length > 0) {
-      barrierList.forEach(b => {
-        const bLat = Number(b.coordinates?.lat ?? b.latitude);
-        const bLng = Number(b.coordinates?.lng ?? b.longitude);
-        if (!isNaN(bLat) && !isNaN(bLng)) {
-          points.push([bLat, bLng]);
-        }
-      });
-    }
-
-    if (points.length > 0) {
-      try {
-        const bounds = L.latLngBounds(points);
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17, animate: true });
-      } catch (e) {
-        console.warn('[Map] Fit bounds warning:', e);
-      }
-    }
-  }, [originCoords, destCoords, accessibleCoords, directCoords, barrierList, map]);
-
-  return null;
-}
-
-// Fit the map to the current location and selected destination only when
-// the destination/route changes. It intentionally does NOT depend on
-// live GPS position, so the map does not jump every time the user moves.
-function DestinationBoundsUpdater({
-  currentCoords,
-  destCoords,
-  accessibleCoords,
-  destinationKey,
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!destinationKey || !destCoords?.lat || !destCoords?.lng) {
+    if (!hasCalculatedRoute || !destCoords?.lat || !destCoords?.lng) {
       return;
     }
 
@@ -133,18 +73,15 @@ function DestinationBoundsUpdater({
 
     try {
       const bounds = L.latLngBounds(points);
-
-      // Keep both the current location and destination visible after
-      // selecting a destination / receiving a new route.
       map.fitBounds(bounds, {
-        padding: [45, 45],
+        padding: [50, 50],
         maxZoom: 17,
         animate: true,
       });
     } catch (e) {
-      console.warn('[Map] Destination bounds warning:', e);
+      console.warn('[Map] Route bounds warning:', e);
     }
-  }, [destinationKey, destCoords, accessibleCoords, map]);
+  }, [hasCalculatedRoute, destCoords?.lat, destCoords?.lng, accessibleCoords, map]);
 
   return null;
 }
@@ -187,7 +124,7 @@ export default function MapPage() {
   } = useNavigation();
 
   const [hasSelectedMapDestination, setHasSelectedMapDestination] = useState(false);
-  const [routeReadyForDestination, setRouteReadyForDestination] = useState(false);
+  const [hasCalculatedRoute, setHasCalculatedRoute] = useState(false);
 
   // Prefer the latest real browser/mobile GPS position over the old
   // configured/demo origin. This keeps the map and route start aligned.
@@ -202,61 +139,26 @@ export default function MapPage() {
   const destLat = destination?.coordinates?.lat;
   const destLng = destination?.coordinates?.lng;
 
-  useEffect(() => {
-    if (!hasSelectedMapDestination || !destLat || !destLng) {
-      setRouteReadyForDestination(false);
-      return;
-    }
-
-    const coords = routes?.accessible?.coordinates;
-
-    if (!Array.isArray(coords) || coords.length < 2) {
-      setRouteReadyForDestination(false);
-      return;
-    }
-
-    // Only accept the route when its final point is actually near the
-    // newly selected destination. This prevents the previous destination's
-    // route from briefly appearing after the user taps a new location.
-    const normalized = normalizeCoordinatesList(coords);
-    const lastPoint = normalized[normalized.length - 1];
-
-    if (!Array.isArray(lastPoint) || lastPoint.length < 2) {
-      setRouteReadyForDestination(false);
-      return;
-    }
-
-    const latDifference = Math.abs(Number(lastPoint[0]) - Number(destLat));
-    const lngDifference = Math.abs(Number(lastPoint[1]) - Number(destLng));
-
-    setRouteReadyForDestination(
-      latDifference <= 0.0005 && lngDifference <= 0.0005
-    );
-  }, [routes, hasSelectedMapDestination, destLat, destLng]);
-
-  // Only show a route after the user has selected a destination on the map.
-  // This prevents the old/default destination route from appearing on first load
-  // and prevents stale route lines from remaining while choosing a new destination.
+  // Only show a route AFTER user presses Start Guidance and calculation completes.
   const accessibleRouteCoords = hasSelectedMapDestination &&
-    routeReadyForDestination &&
+    hasCalculatedRoute &&
     routes?.accessible?.coordinates &&
     routes.accessible.coordinates.length >= 2
     ? normalizeCoordinatesList(routes.accessible.coordinates)
     : [];
 
   const directRouteCoords = hasSelectedMapDestination &&
-    routeReadyForDestination &&
+    hasCalculatedRoute &&
     routes?.fastest?.coordinates &&
     routes.fastest.coordinates.length >= 2
     ? normalizeCoordinatesList(routes.fastest.coordinates)
     : [];
 
-  // Small fixed destination marker. It stays at the selected GPS point.
-  // The live green marker below is the only marker that moves.
+  // Destination marker pinned on map
   const destIcon = createDivIcon(
     `<div style="
-      width: 22px;
-      height: 22px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       background: #f97316;
       border: 3px solid white;
@@ -266,62 +168,40 @@ export default function MapPage() {
       justify-content: center;
     ">
       <div style="
-        width: 7px;
-        height: 7px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         background: white;
       "></div>
     </div>`,
-    [22, 22]
+    [24, 24]
   );
 
-  // Moving current-location marker. This follows userLocation while guidance is active.
+  // User Current Location marker — stays firmly anchored at user's position
   const userLiveIcon = createDivIcon(
-    `<div style="
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      background: #f59e0b;
-      border: 3px solid white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    ">
-      <div style="
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        background: white;
-      "></div>
-      <div style="
-        position: absolute;
-        inset: -5px;
-        border-radius: 50%;
-        border: 2px solid rgba(245,158,11,0.35);
-      "></div>
+    `<div class="relative flex items-center justify-center">
+      <div class="w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-md z-10"></div>
+      <div class="absolute w-8 h-8 rounded-full bg-emerald-500/30 animate-ping"></div>
     </div>`,
-    [26, 26]
+    [32, 32]
   );
 
   const obstacleIcon = createDivIcon(
     `<div class="w-8 h-8 rounded-full bg-rose-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold">
-      ️
+      ⚠️
     </div>`,
     [32, 32]
   );
 
   const handleMapDestinationSelect = ({ lat, lng }) => {
     // Lock the destination while guidance is active.
-    if (isNavSimulating) {
+    if (isNavSimulating || hasCalculatedRoute) {
       triggerHaptic([80, 40]);
       showVisualToast({
         title: 'Destination Locked',
         subtitle: 'Stop guidance before choosing a new destination.',
         type: 'info'
       });
-      console.log('[RAASTA]  Destination change blocked while guidance is active.');
       return;
     }
 
@@ -340,42 +220,18 @@ export default function MapPage() {
       }
     };
 
-    // Hide the old route immediately while the new destination is being calculated.
-    setRouteReadyForDestination(false);
+    // Pin destination without calculating route yet
+    setHasCalculatedRoute(false);
     setHasSelectedMapDestination(true);
-
     setDestination(selectedDestination);
 
     triggerHaptic([50, 30]);
 
     showVisualToast({
-      title: 'Destination Selected',
-      subtitle: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
-      type: 'success'
+      title: 'Destination Pinned',
+      subtitle: 'Tap Start Guidance to find the closest accessible route.',
+      type: 'info'
     });
-
-    console.log(
-      '[RAASTA]  Destination pin selected:',
-      latitude,
-      longitude
-    );
-
-    // Calculate from the REAL browser/mobile GPS position whenever it is
-    // available. Do not fall back to the old demo/origin coordinates just
-    // because guidance has not been started yet.
-    const realGpsStart =
-      userLocation?.lat != null && userLocation?.lng != null
-        ? {
-          lat: Number(userLocation.lat),
-          lng: Number(userLocation.lng)
-        }
-        : null;
-
-    // Destination selection does NOT calculate a route.
-    // Route calculation starts only when the user presses Start Guidance.
-    console.log(
-      '[RAASTA]  Destination changed — waiting for Start Guidance before calculating.'
-    );
   };
 
   return (
@@ -430,34 +286,16 @@ export default function MapPage() {
           {/* Map resizer to ensure tiles render immediately */}
           <MapResizer />
 
-          {/* Dynamic Auto Bounds to fit start, destination, and calculated routes */}
-          <MapBoundsUpdater
-            originCoords={{ lat: startLat, lng: startLng }}
-            destCoords={hasSelectedMapDestination && destLat && destLng
-              ? { lat: destLat, lng: destLng }
-              : null}
+          {/* Fit map view only after route is calculated */}
+          <RouteBoundsFitter
+            currentCoords={{ lat: startLat, lng: startLng }}
+            destCoords={hasSelectedMapDestination && destLat != null && destLng != null ? { lat: destLat, lng: destLng } : null}
             accessibleCoords={accessibleRouteCoords}
-            directCoords={directRouteCoords}
-            barrierList={[]}
-          />
-
-          <DestinationBoundsUpdater
-            currentCoords={
-              userLocation?.lat != null && userLocation?.lng != null
-                ? { lat: Number(userLocation.lat), lng: Number(userLocation.lng) }
-                : { lat: startLat, lng: startLng }
-            }
-            destCoords={
-              hasSelectedMapDestination && destLat != null && destLng != null
-                ? { lat: destLat, lng: destLng }
-                : null
-            }
-            accessibleCoords={accessibleRouteCoords}
-            destinationKey={destination?.id}
+            hasCalculatedRoute={hasCalculatedRoute}
           />
 
           {/* Blocked Direct Route (Red dashed when rerouted) */}
-          {routeReadyForDestination && routes?.fastest?.isBlocked && (
+          {hasCalculatedRoute && routes?.fastest?.isBlocked && directRouteCoords.length >= 2 && (
             <Polyline
               positions={directRouteCoords}
               pathOptions={{
@@ -470,7 +308,7 @@ export default function MapPage() {
           )}
 
           {/* Accessible Step-Free Route (Emerald Green) */}
-          {routeReadyForDestination && accessibleRouteCoords.length >= 2 && (
+          {hasCalculatedRoute && accessibleRouteCoords.length >= 2 && (
             <Polyline
               positions={accessibleRouteCoords}
               pathOptions={{
@@ -481,24 +319,20 @@ export default function MapPage() {
             />
           )}
 
-          {/* Live Current Location Marker */}
-          {isNavSimulating && userLocation?.lat != null && userLocation?.lng != null && (
-            <Marker
-              position={[Number(userLocation.lat), Number(userLocation.lng)]}
-              icon={userLiveIcon}
-            >
-              <Popup>
-                <div className="text-xs font-bold text-slate-900">
-                  <div>📍 Your Current Location</div>
-                  {gpsAccuracy != null && (
-                    <div className="text-[10px] text-slate-600 font-normal">
-                      Accuracy: ±{Math.round(Number(gpsAccuracy))} m
-                    </div>
-                  )}
+          {/* User Current Location Marker — Always anchored at user's real position */}
+          <Marker
+            position={[startLat, startLng]}
+            icon={userLiveIcon}
+          >
+            <Popup>
+              <div className="text-xs font-bold text-slate-900">
+                <div>📍 Your Location</div>
+                <div className="text-[10px] text-slate-600 font-normal">
+                  {userLocation ? 'Live GPS Connected' : 'Starting Position'}
                 </div>
-              </Popup>
-            </Marker>
-          )}
+              </div>
+            </Popup>
+          </Marker>
 
           {/* Destination Marker */}
           {hasSelectedMapDestination && destLat != null && destLng != null && (
@@ -597,25 +431,32 @@ export default function MapPage() {
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
               <span>♿</span>
-              <span>{routes?.accessible?.rerouted ? 'Alternative Route' : 'Accessible Route'}</span>
+              <span>
+                {hasCalculatedRoute
+                  ? (routes?.accessible?.rerouted ? 'Alternative Route' : 'Accessible Route')
+                  : hasSelectedMapDestination
+                    ? 'Destination Pinned'
+                    : 'Accessible Route'}
+              </span>
             </div>
             <div className="text-sm font-extrabold text-white">
               {!hasSelectedMapDestination
-                ? 'Select a destination'
+                ? 'Tap map to set destination'
                 : isCalculatingRoute
-                  ? 'Calculating...'
-                  : routes?.accessible?.distanceMeters != null
+                  ? 'Calculating safest path...'
+                  : hasCalculatedRoute && routes?.accessible?.distanceMeters != null
                     ? `${routes.accessible.distanceMeters} m${routes?.accessible?.durationMinutes ? ` • ${routes.accessible.durationMinutes} min` : ''}`
-                    : 'Route unavailable'}
+                    : 'Tap Start Guidance to calculate'}
             </div>
           </div>
 
           <div className="flex-shrink-0 flex items-center justify-center">
-            {/* Start Walk Simulation */}
+            {/* Start / Stop Guidance Button */}
             <button
               onClick={async () => {
-                if (isNavSimulating) {
+                if (isNavSimulating || hasCalculatedRoute) {
                   stopGpsGuidance();
+                  setHasCalculatedRoute(false);
                 } else {
                   if (!hasSelectedMapDestination || !destination?.coordinates) {
                     showVisualToast({
@@ -626,18 +467,10 @@ export default function MapPage() {
                     return;
                   }
 
-                  // Calculate ONLY when guidance starts.
-                  const realGpsStart =
-                    userLocation?.lat != null && userLocation?.lng != null
-                      ? {
-                        lat: Number(userLocation.lat),
-                        lng: Number(userLocation.lng)
-                      }
-                      : null;
-
-                  console.log(
-                    '[RAASTA] ▶️ Start Guidance — calculating route now.'
-                  );
+                  const realGpsStart = {
+                    lat: startLat,
+                    lng: startLng
+                  };
 
                   try {
                     await requestRouteCalculation(
@@ -645,6 +478,7 @@ export default function MapPage() {
                       selectedProfileId,
                       realGpsStart
                     );
+                    setHasCalculatedRoute(true);
                     startGpsGuidance();
                   } catch (err) {
                     console.error(
@@ -659,12 +493,12 @@ export default function MapPage() {
                   }
                 }
               }}
-              className={`py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 touch-active transition-all min-w-[138px] ${isNavSimulating
+              className={`py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 touch-active transition-all min-w-[138px] ${isNavSimulating || hasCalculatedRoute
                 ? 'bg-rose-600 hover:bg-rose-500 text-white'
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
                 }`}
             >
-              {isNavSimulating ? (
+              {isNavSimulating || hasCalculatedRoute ? (
                 <>
                   <Square className="w-3.5 h-3.5 fill-current" />
                   <span>Stop</span>

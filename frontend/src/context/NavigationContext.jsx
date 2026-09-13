@@ -367,14 +367,19 @@ export function NavigationProvider({ children }) {
 
   const handleSelectProfile = (profileId) => {
     setSelectedProfileId(profileId);
+
     const prof = ACCESSIBILITY_PROFILES.find(p => p.id === profileId);
+
     if (prof) {
       setPreferences(prof.defaultPreferences);
     }
+
     if (profileId === 'deaf') {
       triggerHaptic([200, 100, 200]);
     }
-    requestRouteCalculation(destination, profileId);
+
+    // Do NOT calculate a route here.
+    // Route calculation happens only when Start Guidance is pressed.
   };
 
   const triggerHaptic = () => {
