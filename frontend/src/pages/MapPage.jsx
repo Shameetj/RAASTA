@@ -102,8 +102,8 @@ function UserLocationMapCenterer({ userLocation, hasCalculatedRoute, isNavSimula
   return null;
 }
 
-// Floating button to re-center the map on user's current GPS location
-function RecenterControl({ userLocation }) {
+// Floating controls on the bottom-right for zoom and GPS recenter
+function FloatingMapControls({ userLocation }) {
   const map = useMap();
 
   return (
@@ -111,21 +111,45 @@ function RecenterControl({ userLocation }) {
       className="leaflet-bottom leaflet-right"
       style={{ marginBottom: '35px', marginRight: '12px', pointerEvents: 'auto' }}
     >
-      <button
-        type="button"
-        title="Center on my location"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (userLocation?.lat != null && userLocation?.lng != null) {
-            map.setView([Number(userLocation.lat), Number(userLocation.lng)], 16, {
-              animate: true
-            });
-          }
-        }}
-        className="w-9 h-9 rounded-xl bg-slate-900/95 border border-slate-700 text-emerald-400 shadow-xl flex items-center justify-center hover:bg-slate-800 transition-all touch-active"
-      >
-        <Navigation className="w-4 h-4" />
-      </button>
+      <div className="flex flex-col gap-1.5 shadow-2xl">
+        <button
+          type="button"
+          title="Zoom in"
+          onClick={(e) => {
+            e.stopPropagation();
+            map.zoomIn();
+          }}
+          className="w-9 h-9 rounded-xl bg-slate-900/95 border border-slate-700 text-white shadow-lg flex items-center justify-center hover:bg-slate-800 transition-all touch-active text-base font-bold select-none"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          title="Zoom out"
+          onClick={(e) => {
+            e.stopPropagation();
+            map.zoomOut();
+          }}
+          className="w-9 h-9 rounded-xl bg-slate-900/95 border border-slate-700 text-white shadow-lg flex items-center justify-center hover:bg-slate-800 transition-all touch-active text-base font-bold select-none"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          title="Center on my location"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (userLocation?.lat != null && userLocation?.lng != null) {
+              map.setView([Number(userLocation.lat), Number(userLocation.lng)], 16, {
+                animate: true
+              });
+            }
+          }}
+          className="w-9 h-9 rounded-xl bg-slate-900/95 border border-slate-700 text-emerald-400 shadow-lg flex items-center justify-center hover:bg-slate-800 transition-all touch-active"
+        >
+          <Navigation className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -630,7 +654,7 @@ export default function MapPage() {
           center={[realGpsLat ?? (destLat ?? 15.3990), realGpsLng ?? (destLng ?? 73.8115)]}
           zoom={16}
           scrollWheelZoom={false}
-          zoomControl={true}
+          zoomControl={false}
           dragging={true}
           touchZoom={true}
           doubleClickZoom={true}
@@ -662,8 +686,8 @@ export default function MapPage() {
             isNavSimulating={isNavSimulating}
           />
 
-          {/* Floating Re-center button */}
-          <RecenterControl userLocation={userLocation} />
+          {/* Floating Zoom and Re-center controls on bottom-right */}
+          <FloatingMapControls userLocation={userLocation} />
 
           {/* Fit map view only after route is calculated */}
           <RouteBoundsFitter
@@ -892,13 +916,34 @@ export default function MapPage() {
 
         {/* Map Pinpoint Instruction Banner (when not guiding) */}
         {!hasCalculatedRoute && !isNavSimulating && !isCalculatingRoute && (
-          <div className="absolute top-3 left-3 z-[500] pointer-events-none bg-slate-900/90 backdrop-blur-md border border-cyan-500/60 rounded-xl px-2.5 py-1.5 shadow-xl flex items-center gap-2 text-[11px] font-semibold text-cyan-200 animate-fade-in">
-            <MapPin className="w-3.5 h-3.5 text-cyan-400 animate-pulse flex-shrink-0" />
-            <span>Tap anywhere on map to pin destination</span>
+          <div className="absolute top-3 left-3 right-3 z-[500] pointer-events-none flex items-center justify-between gap-2">
+            <div className="bg-slate-900/90 backdrop-blur-md border border-cyan-500/60 rounded-xl px-2.5 py-1.5 shadow-xl flex items-center gap-2 text-[11px] font-semibold text-cyan-200 animate-fade-in">
+              <MapPin className="w-3.5 h-3.5 text-cyan-400 animate-pulse flex-shrink-0" />
+              <span>Tap anywhere on map to pin destination</span>
+            </div>
+            {destination && (
+              <button
+                type="button"
+                onClick={() => setIsDetailsExpanded(prev => !prev)}
+                className="pointer-events-auto px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-emerald-400 text-xs font-bold shadow-xl backdrop-blur-md transition-all touch-active flex items-center gap-1"
+              >
+                {isDetailsExpanded ? (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Big Map</span>
+                  </>
+                ) : (
+                  <>
+                    <List className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Details</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
 
-        {/* Active Guidance Top Banner Overlay on Map */}
+        {/* Active Guidance Top Banner Overlay on Map with seamlessly integrated Big Map / Details toggle */}
         {(hasCalculatedRoute || isNavSimulating) && (
           <div className="absolute top-3 left-3 right-3 z-[500] pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-emerald-500/70 rounded-2xl p-2.5 shadow-2xl flex items-center gap-3 animate-fade-in">
             <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0 text-emerald-400">
@@ -925,6 +970,25 @@ export default function MapPage() {
                 </div>
               )}
             </div>
+
+            {/* Clean, Non-Overlapping View Toggle Button inside the banner */}
+            <button
+              type="button"
+              onClick={() => setIsDetailsExpanded(prev => !prev)}
+              className="flex-shrink-0 px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-emerald-400 text-[11px] font-bold flex items-center gap-1.5 transition-all touch-active shadow-md"
+            >
+              {isDetailsExpanded ? (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Big Map</span>
+                </>
+              ) : (
+                <>
+                  <List className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Details</span>
+                </>
+              )}
+            </button>
           </div>
         )}
 
@@ -944,28 +1008,6 @@ export default function MapPage() {
               {liveIncidents.length}
             </span>
           )}
-        </div>
-
-        {/* Floating Quick Map Size Toggle (Big Map vs Details) */}
-        <div className="absolute top-3 right-3 z-[500] pointer-events-auto">
-          <button
-            type="button"
-            title={isDetailsExpanded ? "Maximize Map" : "Show Route Details"}
-            onClick={() => setIsDetailsExpanded(prev => !prev)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/95 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-emerald-400 text-xs font-bold shadow-xl backdrop-blur-md transition-all touch-active"
-          >
-            {isDetailsExpanded ? (
-              <>
-                <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Big Map</span>
-              </>
-            ) : (
-              <>
-                <List className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Details</span>
-              </>
-            )}
-          </button>
         </div>
 
         {/* Loading Overlay */}
