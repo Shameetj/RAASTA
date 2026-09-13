@@ -29,7 +29,10 @@ import {
   MapPin,
   Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Milestone,
+  CornerUpRight,
+  ArrowUp
 } from 'lucide-react';
 
 // Leaflet Map Resizer to ensure tiles render immediately when tab switches
@@ -322,6 +325,72 @@ export default function MapPage() {
     });
   }, [hasCalculatedRoute, routes?.accessible, barriers, selectedProfileId]);
 
+  // Compute numbered waymark checkpoints along the calculated accessible route
+  const routeWaymarks = useMemo(() => {
+    if (!hasCalculatedRoute || accessibleRouteCoords.length < 2) return [];
+
+    const segments = routes?.accessible?.segments || [];
+    if (segments.length === 0) return [];
+
+    return segments.map((seg, idx) => {
+      let lat, lng;
+      if (seg.coordinates?.lat != null && seg.coordinates?.lng != null) {
+        lat = Number(seg.coordinates.lat);
+        lng = Number(seg.coordinates.lng);
+      } else if (idx === 0) {
+        lat = accessibleRouteCoords[0][0];
+        lng = accessibleRouteCoords[0][1];
+      } else if (idx === segments.length - 1) {
+        lat = accessibleRouteCoords[accessibleRouteCoords.length - 1][0];
+        lng = accessibleRouteCoords[accessibleRouteCoords.length - 1][1];
+      } else {
+        const coordIdx = Math.min(
+          accessibleRouteCoords.length - 1,
+          Math.round((idx / (segments.length - 1)) * (accessibleRouteCoords.length - 1))
+        );
+        lat = accessibleRouteCoords[coordIdx][0];
+        lng = accessibleRouteCoords[coordIdx][1];
+      }
+
+      return {
+        index: idx + 1,
+        isFirst: idx === 0,
+        isLast: idx === segments.length - 1,
+        lat,
+        lng,
+        instruction: seg.text || seg.instruction || `Waymark ${idx + 1}`,
+        distance: seg.distance || '',
+        safe: seg.safe !== false,
+        highlight: seg.highlight || seg.visual_cue || ''
+      };
+    });
+  }, [hasCalculatedRoute, accessibleRouteCoords, routes?.accessible?.segments]);
+
+  // Custom numbered milestone marker icon for waymarks along the route
+  const createWaymarkIcon = (num, isHazard = false) => {
+    return createDivIcon(
+      `<div style="
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: ${isHazard ? '#f59e0b' : '#059669'};
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 800;
+        font-family: system-ui, -apple-system, sans-serif;
+      ">
+        ${num}
+      </div>`,
+      [26, 26]
+    );
+  };
+
   // Destination marker pinned on map — Cyan target matching original app design (No emoji)
   const destIcon = createDivIcon(
     `<div style="
@@ -535,28 +604,86 @@ export default function MapPage() {
 
           {/* Blocked Direct Route (Red dashed when rerouted) */}
           {hasCalculatedRoute && routes?.fastest?.isBlocked && directRouteCoords.length >= 2 && (
-            <Polyline
-              positions={directRouteCoords}
-              pathOptions={{
-                color: '#ef4444',
-                weight: 4,
-                dashArray: '6, 6',
-                opacity: 0.8
-              }}
-            />
+            <>
+              <Polyline
+                positions={directRouteCoords}
+                pathOptions={{
+                  color: '#7f1d1d',
+                  weight: 7,
+                  opacity: 0.6,
+                  lineCap: 'round',
+                  lineJoin: 'round'
+                }}
+              />
+              <Polyline
+                positions={directRouteCoords}
+                pathOptions={{
+                  color: '#ef4444',
+                  weight: 3.5,
+                  dashArray: '6, 6',
+                  opacity: 0.9,
+                  lineCap: 'round',
+                  lineJoin: 'round'
+                }}
+              />
+            </>
           )}
 
-          {/* Accessible Step-Free Route (Emerald Green) */}
+          {/* Accessible Step-Free Route (Emerald Green with Outer Glow Casing) */}
           {hasCalculatedRoute && accessibleRouteCoords.length >= 2 && (
-            <Polyline
-              positions={accessibleRouteCoords}
-              pathOptions={{
-                color: '#10b981',
-                weight: 6,
-                opacity: 0.95
-              }}
-            />
+            <>
+              <Polyline
+                positions={accessibleRouteCoords}
+                pathOptions={{
+                  color: '#064e3b',
+                  weight: 9,
+                  opacity: 0.75,
+                  lineCap: 'round',
+                  lineJoin: 'round'
+                }}
+              />
+              <Polyline
+                positions={accessibleRouteCoords}
+                pathOptions={{
+                  color: '#10b981',
+                  weight: 5,
+                  opacity: 1,
+                  lineCap: 'round',
+                  lineJoin: 'round'
+                }}
+              />
+            </>
           )}
+
+          {/* Intermediate Waymark Checkpoints along the calculated route */}
+          {hasCalculatedRoute && routeWaymarks.map((wm) => {
+            if (wm.isFirst || wm.isLast) return null; // Start & Destination already marked
+            return (
+              <Marker
+                key={`waymark-${wm.index}`}
+                position={[wm.lat, wm.lng]}
+                icon={createWaymarkIcon(wm.index, !wm.safe)}
+              >
+                <Popup>
+                  <div className="p-1 min-w-[190px] text-white">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 mb-1">
+                      <Milestone className="w-3.5 h-3.5" />
+                      <span>Waymark {wm.index}</span>
+                      {wm.distance && <span className="text-[10px] text-slate-400 font-normal">({wm.distance})</span>}
+                    </div>
+                    <div className="text-[11px] text-slate-200 leading-snug font-medium mb-1.5">
+                      {wm.instruction}
+                    </div>
+                    {wm.highlight && (
+                      <div className="text-[10px] px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 inline-block font-semibold">
+                        ✓ {wm.highlight}
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
           {/* User Current Location Marker — ONLY rendered when real GPS position is confirmed */}
           {hasRealGps && (
@@ -692,8 +819,36 @@ export default function MapPage() {
 
         </MapContainer>
 
+        {/* Active Guidance Top Banner Overlay on Map */}
+        {(hasCalculatedRoute || isNavSimulating) && (
+          <div className="absolute top-3 left-3 right-3 z-[500] pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-emerald-500/70 rounded-2xl p-2.5 shadow-2xl flex items-center gap-3 animate-fade-in">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0 text-emerald-400">
+              <Navigation className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between text-[10px] font-bold">
+                <span className="text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Accessible Guidance</span>
+                </span>
+                <span className="text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-[9px] border border-slate-700 font-semibold">
+                  {routes?.accessible?.distanceMeters != null ? `${routes.accessible.distanceMeters} m` : 'Active'}
+                </span>
+              </div>
+              <div className="text-xs font-bold text-white truncate mt-0.5">
+                {routes?.accessible?.segments?.[0]?.text || `Follow step-free path to ${destination?.name || 'Destination'}`}
+              </div>
+              {routes?.accessible?.segments?.[0]?.highlight && (
+                <div className="text-[10px] text-emerald-300/90 font-medium truncate">
+                  ✓ {routes.accessible.segments[0].highlight}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Map Legend: Community Reports vs Live Traffic Incidents (Improvement 9) */}
-        <div className="absolute top-3 right-3 z-[500] pointer-events-auto bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-xl flex items-center gap-2.5 text-[10px] font-medium text-slate-200">
+        <div className="absolute bottom-3 left-3 z-[500] pointer-events-auto bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-xl flex items-center gap-2.5 text-[10px] font-medium text-slate-200">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-600 border border-white inline-block"></span>
             <span>Community</span>
@@ -986,6 +1141,52 @@ export default function MapPage() {
             </button>
           </div>
         </div>
+
+        {/* Step-by-Step Waymarks & Navigation Guidance Output Card */}
+        {hasCalculatedRoute && routes?.accessible?.segments && routes.accessible.segments.length > 0 && (
+          <div className="p-3 rounded-xl bg-slate-900 border border-emerald-500/40 space-y-2.5 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                <Milestone className="w-4 h-4 text-emerald-400" />
+                <span>Waymarks & Turn-by-Turn Guidance</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700/60 font-semibold">
+                {routes.accessible.segments.length} Checkpoints
+              </span>
+            </div>
+
+            <div className="space-y-1.5 pt-1 border-t border-slate-800/80 max-h-48 overflow-y-auto pr-1">
+              {routes.accessible.segments.map((seg, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-2.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-emerald-950 border border-emerald-600/60 text-emerald-300 font-extrabold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {idx + 1}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-slate-100 leading-snug">
+                      {seg.text || seg.instruction}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      {seg.distance && (
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {seg.distance}
+                        </span>
+                      )}
+                      {seg.highlight && (
+                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                          <span>{seg.highlight}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Improvement 1: Route Accessibility Score Card (Shown after Start Guidance) */}
         {hasCalculatedRoute && accessibilityAnalysis && (
