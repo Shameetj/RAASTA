@@ -1,31 +1,28 @@
 /**
  * RAASTA Mobile API Client
  * Primary Target: Dev1 backend
- * http://26.110.10.242:8000/api
  *
  * Dev1 forwards route calculations to Dev2.
  * Accessible rerouting can take several seconds because
  * Dev2 may need to query OSRM multiple times.
  */
 
-const PRIMARY_URL = import.meta.env.VITE_API_URL || 'https://gear-holders-obituaries-fonts.trycloudflare.com/api';
+// Use the production Dev1 API by default so the deployed Cloudflare
+// frontend works even if VITE_API_URL was not configured in Pages.
+const PRIMARY_URL =
+  import.meta.env.VITE_API_URL ||
+  'https://raasta-dev1.onrender.com/api';
 
-const LOCAL_FALLBACK_URL =
-  '/api';
+const LOCAL_FALLBACK_URL = '/api';
 
 const SERVER_ERROR_MESSAGE =
   'Unable to connect to RAASTA server. Please try again.';
-
 
 async function resilientFetch(
   endpoint,
   options = {},
   timeoutMs = 10000
 ) {
-  // ---------------------------------------------------------
-  // 1. Primary Dev1 server
-  // ---------------------------------------------------------
-
   try {
     const res = await fetch(
       `${PRIMARY_URL}${endpoint}`,
@@ -48,10 +45,6 @@ async function resilientFetch(
       err
     );
   }
-
-  // ---------------------------------------------------------
-  // 2. Local fallback
-  // ---------------------------------------------------------
 
   if (PRIMARY_URL !== LOCAL_FALLBACK_URL) {
     try {
@@ -81,56 +74,23 @@ async function resilientFetch(
   throw new Error(SERVER_ERROR_MESSAGE);
 }
 
-
-// -----------------------------------------------------------
-// Locations
-// -----------------------------------------------------------
-
 export async function fetchLocations() {
   return await resilientFetch(
     '/locations',
-    {
-      headers: {
-        'Accept': 'application/json'
-      }
-    },
+    { headers: { Accept: 'application/json' } },
     10000
   );
 }
-
-
-// -----------------------------------------------------------
-// Blockages
-// -----------------------------------------------------------
 
 export async function fetchBlockages() {
   return await resilientFetch(
     '/blockages',
-    {
-      headers: {
-        'Accept': 'application/json'
-      }
-    },
+    { headers: { Accept: 'application/json' } },
     10000
   );
 }
 
-
-// -----------------------------------------------------------
-// Route calculation
-//
-// IMPORTANT:
-// Accessible rerouting can take around 30+ seconds because
-// Dev1 calls Dev2 and Dev2 may perform multiple OSRM requests.
-//
-// Therefore this request gets a 60-second timeout.
-// -----------------------------------------------------------
-
-export async function calculateRoute({
-  start,
-  destination,
-  profile
-}) {
+export async function calculateRoute({ start, destination, profile }) {
   const startLat =
     typeof start === 'object'
       ? Number(start.latitude ?? start.lat)
@@ -160,10 +120,7 @@ export async function calculateRoute({
       latitude: destLat,
       longitude: destLng
     },
-    profile:
-      profile === 'deaf'
-        ? 'deaf'
-        : 'wheelchair'
+    profile: profile === 'deaf' ? 'deaf' : 'wheelchair'
   };
 
   return await resilientFetch(
@@ -172,7 +129,7 @@ export async function calculateRoute({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        Accept: 'application/json'
       },
       body: JSON.stringify(payload)
     },
@@ -180,81 +137,31 @@ export async function calculateRoute({
   );
 }
 
-
-// -----------------------------------------------------------
-// Report blockage
-// -----------------------------------------------------------
-
-export async function reportBlockage(
-  blockageData
-) {
+export async function reportBlockage(blockageData) {
   const lat =
     blockageData.latitude !== undefined
       ? Number(blockageData.latitude)
-      : (
-        blockageData.coordinates?.lat !== undefined
-          ? Number(blockageData.coordinates.lat)
-          : Number(
-            blockageData.lat ?? 15.4900
-          )
-      );
+      : blockageData.coordinates?.lat !== undefined
+        ? Number(blockageData.coordinates.lat)
+        : Number(blockageData.lat ?? 15.49);
 
   const lng =
     blockageData.longitude !== undefined
       ? Number(blockageData.longitude)
-      : (
-        blockageData.coordinates?.lng !== undefined
-          ? Number(blockageData.coordinates.lng)
-          : Number(
-            blockageData.lng ?? 73.8270
-          )
-      );
+      : blockageData.coordinates?.lng !== undefined
+        ? Number(blockageData.coordinates.lng)
+        : Number(blockageData.lng ?? 73.827);
 
   const payload = {
-    type: (
-      blockageData.type ||
-      blockageData.category ||
-      'stairs'
-    ).toLowerCase(),
-
-    title:
-      blockageData.title ||
-      'Integration Test Stairs',
-
-    description:
-      blockageData.description ||
-      'Stairs blocking accessible path',
-
-    latitude:
-      !isNaN(lat)
-        ? lat
-        : 15.4900,
-
-    longitude:
-      !isNaN(lng)
-        ? lng
-        : 73.8270,
-
+    type: (blockageData.type || blockageData.category || 'stairs').toLowerCase(),
+    title: blockageData.title || 'Integration Test Stairs',
+    description: blockageData.description || 'Stairs blocking accessible path',
+    latitude: !isNaN(lat) ? lat : 15.49,
+    longitude: !isNaN(lng) ? lng : 73.827,
     severity: (() => {
-      const severity = (
-        blockageData.severity ||
-        'high'
-      ).toLowerCase();
-
-      // Dev1 accepts only: low, medium, high.
-      // The UI also has a CRITICAL option, so map it to high.
-      if (severity === 'critical') {
-        return 'high';
-      }
-
-      if (
-        severity !== 'low' &&
-        severity !== 'medium' &&
-        severity !== 'high'
-      ) {
-        return 'high';
-      }
-
+      const severity = (blockageData.severity || 'high').toLowerCase();
+      if (severity === 'critical') return 'high';
+      if (!['low', 'medium', 'high'].includes(severity)) return 'high';
       return severity;
     })()
   };
@@ -265,7 +172,7 @@ export async function reportBlockage(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        Accept: 'application/json'
       },
       body: JSON.stringify(payload)
     },
@@ -273,19 +180,8 @@ export async function reportBlockage(
   );
 }
 
-
-// -----------------------------------------------------------
-// Reset demo data
-// -----------------------------------------------------------
-
 export async function resetDemoData() {
-  return await resilientFetch(
-    '/demo/reset',
-    {
-      method: 'POST'
-    },
-    10000
-  );
+  return await resilientFetch('/demo/reset', { method: 'POST' }, 10000);
 }
 
 export async function deleteBlockage(blockageId) {
@@ -295,8 +191,6 @@ export async function deleteBlockage(blockageId) {
 
   return await resilientFetch(`/blockages/${blockageId}`, {
     method: 'DELETE',
-    headers: {
-      'Accept': 'application/json'
-    }
+    headers: { Accept: 'application/json' }
   });
 }
