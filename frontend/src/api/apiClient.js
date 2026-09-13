@@ -142,10 +142,7 @@ export async function calculateRoute({ start, destination, profile, blockages = 
     blockages
   };
 
-  // Debug logging start
-  console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST START');
-  console.log('[RAASTA DEBUG] FRONTEND REQUEST URL: /api/routes/calculate');
-  console.log('[RAASTA DEBUG] FRONTEND REQUEST PAYLOAD:', payload);
+  console.log('[RAASTA DEBUG] 4. requestRouteCalculation() START - Payload:', payload);
   const routeStartTime = Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -161,23 +158,18 @@ export async function calculateRoute({ start, destination, profile, blockages = 
       body: JSON.stringify(payload),
       signal: controller.signal
     });
-    console.log('[RAASTA DEBUG] FRONTEND RESPONSE RECEIVED');
-    console.log('[RAASTA DEBUG] FRONTEND RESPONSE STATUS:', response.status);
+    console.log('[RAASTA DEBUG] 5. API response status:', response.status);
     const responseTime = Date.now() - routeStartTime;
-    console.log('[RAASTA DEBUG] FRONTEND RESPONSE TIME:', responseTime, 'ms');
+    console.log(`[RAASTA DEBUG] API response received in ${responseTime}ms`);
     result = await response.json();
-    console.log('[RAASTA DEBUG] FRONTEND RESPONSE BODY:', result);
-    console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST SUCCESS');
+    console.log('[RAASTA DEBUG] 6. complete response JSON:', JSON.stringify(result));
   } catch (err) {
-    console.error('[RAASTA DEBUG] FRONTEND ROUTE REQUEST ERROR', err);
-    console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST FINISHED');
+    console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION in API fetch /api/routes/calculate:', err);
     clearTimeout(timeoutId);
     throw err;
   } finally {
     clearTimeout(timeoutId);
-    console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST FINISHED');
   }
-  // End of debug logging
   return result;
 }
 

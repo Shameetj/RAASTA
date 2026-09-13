@@ -26,6 +26,14 @@ def calculate_route_endpoint(
     db: Session = Depends(get_db),
 ):
     try:
+        # Log incoming request for debugging
+        import json
+        try:
+            request_dict = request.dict()
+            print('[RAASTA DEBUG] Dev1 received request:', json.dumps(request_dict))
+        except Exception as e:
+            print('[RAASTA DEBUG] Dev1 request logging failed:', e)
+
         # Get all active blockages from Developer 1's database.
         blockage_records = get_active_blockages(db)
 

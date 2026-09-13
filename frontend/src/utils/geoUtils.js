@@ -27,9 +27,12 @@ export function normalizeCoordinate(coord) {
       return [val1, val2]; // Already [lat, lng]
     }
 
-    // Regional heuristic for Delhi / India (lat ~ 28.x, lng ~ 77.x)
-    if (val1 > 50 && val2 < 40) {
+    // Regional heuristic for India (lat ~ 8 to 38, lng ~ 68 to 98)
+    if (val1 >= 50 && val1 <= 100 && val2 >= 0 && val2 <= 45) {
       return [val2, val1]; // GeoJSON [lng, lat] -> [lat, lng]
+    }
+    if (val1 >= 0 && val1 <= 45 && val2 >= 50 && val2 <= 100) {
+      return [val1, val2]; // Already [lat, lng]
     }
 
     return [val1, val2];
@@ -62,9 +65,9 @@ export function normalizeCoordinatesList(coordsList) {
  * Supports:
  * - Direct coordinate array: [ [lat, lng], ... ]
  * - Nested route.coordinates: [ ... ]
- * - Nested route.path: [ ... ]
- * - Nested route.points / waypoints: [ ... ]
- * - GeoJSON geometry: { type: 'LineString', coordinates: [ [lng, lat], ... ] }
+ * - Nested route.geometry.coordinates / geojson.coordinates
+ * - Nested route.path / points / waypoints
+ * - Nested objects: accessible_route, route, direct_route, alternative_route, safe_route, routes[0]
  * 
  * @param {Object|Array} routeObj 
  * @returns {Array<[number, number]>}
@@ -101,9 +104,34 @@ export function extractBackendRouteCoordinates(routeObj) {
     return normalizeCoordinatesList(routeObj.waypoints);
   }
 
-  // 5. Nested route inside routeObj.route
+  // 5. Nested route inside accessible_route, route, direct_route, alternative_route, safe_route, data, routes
+  if (routeObj.accessible_route) {
+    const coords = extractBackendRouteCoordinates(routeObj.accessible_route);
+    if (coords && coords.length > 0) return coords;
+  }
   if (routeObj.route) {
-    return extractBackendRouteCoordinates(routeObj.route);
+    const coords = extractBackendRouteCoordinates(routeObj.route);
+    if (coords && coords.length > 0) return coords;
+  }
+  if (routeObj.direct_route) {
+    const coords = extractBackendRouteCoordinates(routeObj.direct_route);
+    if (coords && coords.length > 0) return coords;
+  }
+  if (routeObj.alternative_route) {
+    const coords = extractBackendRouteCoordinates(routeObj.alternative_route);
+    if (coords && coords.length > 0) return coords;
+  }
+  if (routeObj.safe_route) {
+    const coords = extractBackendRouteCoordinates(routeObj.safe_route);
+    if (coords && coords.length > 0) return coords;
+  }
+  if (routeObj.data) {
+    const coords = extractBackendRouteCoordinates(routeObj.data);
+    if (coords && coords.length > 0) return coords;
+  }
+  if (Array.isArray(routeObj.routes) && routeObj.routes.length > 0) {
+    const coords = extractBackendRouteCoordinates(routeObj.routes[0]);
+    if (coords && coords.length > 0) return coords;
   }
 
   return [];

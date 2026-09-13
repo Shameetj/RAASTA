@@ -194,12 +194,16 @@ export function NavigationProvider({ children }) {
     startOverride = null,
     extraBlockages = []
   ) => {
+    console.log('[RAASTA DEBUG] 4. requestRouteCalculation() START');
     setIsCalculatingRoute(true);
     try {
-      const rawStartLat = startOverride?.lat ?? userLocation?.lat ?? origin.coordinates?.lat;
-      const rawStartLng = startOverride?.lng ?? userLocation?.lng ?? origin.coordinates?.lng;
+      const rawStartLat = startOverride?.lat ?? userLocation?.lat;
+      const rawStartLng = startOverride?.lng ?? userLocation?.lng;
       const rawDestLat = targetDest?.coordinates?.lat;
       const rawDestLng = targetDest?.coordinates?.lng;
+
+      console.log('[RAASTA DEBUG] 2. GPS coordinates being used as start:', { lat: rawStartLat, lng: rawStartLng });
+      console.log('[RAASTA DEBUG] 3. fixed destination coordinates:', { lat: rawDestLat, lng: rawDestLng });
 
       if (
         rawStartLat == null || rawStartLng == null ||
@@ -207,7 +211,9 @@ export function NavigationProvider({ children }) {
         isNaN(Number(rawStartLat)) || isNaN(Number(rawStartLng)) ||
         isNaN(Number(rawDestLat)) || isNaN(Number(rawDestLng))
       ) {
-        throw new Error('Current location unavailable. Please enable location access.');
+        const missingErr = new Error('Current GPS location unavailable. Please ensure location services are enabled.');
+        console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION:', missingErr.message);
+        throw missingErr;
       }
 
       const startLat = Number(rawStartLat);
@@ -229,60 +235,77 @@ export function NavigationProvider({ children }) {
       });
 
       if (!result || !result.success) {
-        throw new Error(result?.message || 'RAASTA could not calculate an accessible route.');
+        const failErr = new Error(result?.message || 'RAASTA could not calculate an accessible route.');
+        console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION: Backend returned non-success result:', result);
+        throw failErr;
       }
 
-      console.log('[RAASTA] Received calculated route from backend:', result);
       setApiError(null);
 
-      // 1. Extract backend accessible coordinates (Backend -> coordinates -> Leaflet Polyline)
-      const routeData = result.route || result;
-      const backendAccessibleCoords = extractBackendRouteCoordinates(
-        routeData.coordinates ||
-        routeData ||
-        result.alternative_route ||
+      // 7. routeData selected from response
+      const accessibleRouteObj =
         result.accessible_route ||
-        result.safe_route ||
-        (result.coordinates ? result : null) ||
-        (result.routes && result.routes[0] ? result.routes[0] : null)
-      );
+        result.route ||
+        (Array.isArray(result.routes) && result.routes.length > 0 ? result.routes[0] : null) ||
+        result;
+
+      console.log('[RAASTA DEBUG] 7. routeData selected from response:', accessibleRouteObj);
+
+      // 8. extracted accessible route coordinates LENGTH
+      const backendAccessibleCoords = extractBackendRouteCoordinates(accessibleRouteObj);
+      console.log('[RAASTA DEBUG] 8. extracted accessible route coordinates LENGTH:', backendAccessibleCoords.length);
 
       if (!backendAccessibleCoords || backendAccessibleCoords.length < 2) {
-        throw new Error('RAASTA could not calculate an accessible route. Invalid geometry.');
+        const errorReason = `Route geometry parsing failed. Extracted coordinates length is ${backendAccessibleCoords ? backendAccessibleCoords.length : 0} (expected >= 2). Raw route object: ${JSON.stringify(accessibleRouteObj)}`;
+        console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION:', errorReason);
+        throw new Error(errorReason);
       }
 
-      // 2. Extract backend direct coordinates
-      const backendDirectCoords = extractBackendRouteCoordinates(
+      // 9. extracted direct route coordinates LENGTH
+      const directRouteObj =
         result.direct_route ||
         result.fastest_route ||
-        (result.routes && result.routes[1] ? result.routes[1] : null)
-      );
+        (Array.isArray(result.routes) && result.routes.length > 1 ? result.routes[1] : null) ||
+        result.route ||
+        accessibleRouteObj;
 
-      // 3. Extract actual backend distance, duration, rerouted status, alerts
-      const rawDistance = routeData.distance_meters !== undefined
-        ? Number(routeData.distance_meters)
-        : (routeData.distance !== undefined ? Number(routeData.distance) : null);
-      const distanceMeters = rawDistance !== null ? Math.round(rawDistance * 10) / 10 : null;
+      const backendDirectCoords = extractBackendRouteCoordinates(directRouteObj);
+      console.log('[RAASTA DEBUG] 9. extracted direct route coordinates LENGTH:', backendDirectCoords.length);
 
-      const rawDuration = routeData.duration_seconds !== undefined
-        ? Number(routeData.duration_seconds)
-        : (routeData.duration !== undefined ? Number(routeData.duration) : null);
-      const durationSeconds = rawDuration !== null ? Number(rawDuration) : null;
+      // 10. distance
+      const rawDistance = accessibleRouteObj.distance_meters !== undefined
+        ? Number(accessibleRouteObj.distance_meters)
+        : (accessibleRouteObj.distance !== undefined ? Number(accessibleRouteObj.distance) : (result.distance_meters ?? result.distance ?? null));
+      const distanceMeters = rawDistance !== null && !isNaN(rawDistance) ? Math.round(rawDistance * 10) / 10 : null;
+      console.log('[RAASTA DEBUG] 10. distance:', distanceMeters, 'meters');
+
+      // 11. duration
+      const rawDuration = accessibleRouteObj.duration_seconds !== undefined
+        ? Number(accessibleRouteObj.duration_seconds)
+        : (accessibleRouteObj.duration !== undefined ? Number(accessibleRouteObj.duration) : (result.duration_seconds ?? result.duration ?? null));
+      const durationSeconds = rawDuration !== null && !isNaN(rawDuration) ? Number(rawDuration) : null;
       const durationMinutes = durationSeconds !== null ? Math.max(1, Math.round(durationSeconds / 60)) : null;
-      const isRerouted = Boolean(result.rerouted);
+      console.log('[RAASTA DEBUG] 11. duration:', durationMinutes, 'minutes (', durationSeconds, 'seconds)');
+
+      // 12. rerouted
+      const isRerouted = Boolean(result.rerouted || accessibleRouteObj.rerouted);
+      console.log('[RAASTA DEBUG] 12. rerouted:', isRerouted);
+
+      // 13. score
+      const realScore = result.accessibility_score?.score ?? result.score ?? accessibleRouteObj.score ?? null;
+      const realScoreRating = result.accessibility_score?.grade ?? result.score_rating ?? accessibleRouteObj.scoreRating ?? null;
+      console.log('[RAASTA DEBUG] 13. score:', realScore, 'rating:', realScoreRating);
+
       const alertsList = Array.isArray(result.alerts) ? result.alerts : (Array.isArray(result.visual_alerts) ? result.visual_alerts : []);
 
-      // 4. Real score ONLY if returned by backend (do NOT fabricate)
-      const realScore = result.accessibility_score?.score ?? result.score ?? routeData.score ?? null;
-      const realScoreRating = result.accessibility_score?.grade ?? result.score_rating ?? null;
-
-      // Update state with genuine backend route information
+      // 14. setRoutes() called
+      console.log('[RAASTA DEBUG] 14. setRoutes() called with coordinates length:', backendAccessibleCoords.length);
       setRoutes(prev => ({
         fastest: {
           ...prev.fastest,
-          name: result.direct_route?.name || 'Direct Route',
-          durationMinutes: result.direct_route?.duration_seconds ? Math.round(result.direct_route.duration_seconds / 60) : null,
-          distanceMeters: result.direct_route?.distance_meters ?? null,
+          name: directRouteObj?.name || 'Direct Route',
+          durationMinutes: directRouteObj?.duration_seconds ? Math.round(directRouteObj.duration_seconds / 60) : (directRouteObj?.duration ? Math.round(directRouteObj.duration / 60) : null),
+          distanceMeters: directRouteObj?.distance_meters ?? directRouteObj?.distance ?? null,
           isBlocked: isRerouted,
           blockedReason: alertsList.length > 0 ? (typeof alertsList[0] === 'string' ? alertsList[0] : alertsList[0].message) : (isRerouted ? 'Blockage detected on direct route' : null),
           score: null,
@@ -333,7 +356,6 @@ export function NavigationProvider({ children }) {
           const severity = (b.severity || 'high').toLowerCase();
           const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
           const description = b.description || (rawType === 'stairs' ? 'Stairs blocking sidewalk' : `${typeLabel} blocking sidewalk`);
-
           return {
             id: b.id || `barr-backend-${i}-${lat}-${lng}`,
             title: b.title || typeLabel,
@@ -357,16 +379,18 @@ export function NavigationProvider({ children }) {
         }
       }
 
+      // 15. requestRouteCalculation() SUCCESS/RESOLVED
+      console.log('[RAASTA DEBUG] 15. requestRouteCalculation() SUCCESS/RESOLVED');
       return result;
-    } catch (e) {
-      console.error('[RAASTA] Route calculation failed:', e);
-      setApiError(e?.message || 'Unable to calculate accessible route.');
+    } catch (error) {
+      console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION in requestRouteCalculation:', error);
+      setApiError(error.message || 'Error calculating route');
       showVisualToast({
         title: 'Route Calculation Failed',
-        subtitle: e?.message || 'Unable to calculate accessible route.',
+        subtitle: error.message || 'Unable to calculate route',
         type: 'error'
       });
-      throw e;
+      throw error;
     } finally {
       setIsCalculatingRoute(false);
     }
@@ -745,40 +769,42 @@ export function NavigationProvider({ children }) {
   // ---------------------------------------------------------
 
   const startGpsGuidance = () => {
-    if (
-      typeof navigator === 'undefined' ||
-      !navigator.geolocation
-    ) {
-      setLocationError(
-        'Geolocation is not supported by this browser.'
-      );
-      return;
-    }
+    try {
+      console.log('[RAASTA DEBUG] 17. startGpsGuidance() START');
+      if (
+        typeof navigator === 'undefined' ||
+        !navigator.geolocation
+      ) {
+        setLocationError(
+          'Geolocation is not supported by this browser.'
+        );
+        return;
+      }
 
-    if (gpsActiveRef.current) {
+      if (gpsActiveRef.current) {
+        console.log(
+          '[RAASTA DEBUG] 17. startGpsGuidance(): GPS guidance already active.'
+        );
+        return;
+      }
+
       console.log(
-        '[RAASTA] GPS guidance already active.'
+        '[RAASTA DEBUG] 17. startGpsGuidance(): Starting GPS guidance with real browser/mobile GPS...'
       );
-      return;
-    }
 
-    console.log(
-      '[RAASTA] Starting GPS guidance with real browser/mobile GPS...'
-    );
+      gpsActiveRef.current = true;
 
-    gpsActiveRef.current = true;
+      // Allow a new blockage detection session.
+      reroutedBlockageRef.current = null;
 
-    // Allow a new blockage detection session.
-    reroutedBlockageRef.current = null;
+      // A new guidance session starts a fresh movement baseline.
+      lastRouteCalculationLocationRef.current = null;
+      routeCalculationInProgressRef.current = false;
+      guidanceStartLocationRef.current = null;
+      guidanceMovedAwayRef.current = false;
 
-    // A new guidance session starts a fresh movement baseline.
-    lastRouteCalculationLocationRef.current = null;
-    routeCalculationInProgressRef.current = false;
-    guidanceStartLocationRef.current = null;
-    guidanceMovedAwayRef.current = false;
-
-    setLocationError(null);
-    setIsNavSimulating(true);
+      setLocationError(null);
+      setIsNavSimulating(true);
 
     const startWatching = () => {
       if (!gpsActiveRef.current) {
@@ -858,6 +884,10 @@ export function NavigationProvider({ children }) {
     };
 
     startWatching();
+    } catch (exc) {
+      console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION in startGpsGuidance:', exc);
+      throw exc;
+    }
   };
 
   // ---------------------------------------------------------

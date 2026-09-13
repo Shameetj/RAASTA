@@ -12,3 +12,4 @@ class RouteCalculateRequest(BaseModel):
     start: Coordinate
     destination: Coordinate
     profile: Literal["wheelchair", "deaf"]
+    blockages: list = Field(default_factory=list)

@@ -241,19 +241,15 @@ export default function MapPage() {
   const [showExplanation, setShowExplanation] = useState(false);
 
   // Only treat location as real if acquired from device GPS or stored real fix
-  const hasRealGps = userLocation?.lat != null && userLocation?.lng != null;
-  const startLat = hasRealGps
-    ? Number(userLocation.lat)
-    : (origin?.coordinates?.lat ?? 15.3990);
-  const startLng = hasRealGps
-    ? Number(userLocation.lng)
-    : (origin?.coordinates?.lng ?? 73.8115);
-  const destLat = destination?.coordinates?.lat;
-  const destLng = destination?.coordinates?.lng;
+  const hasRealGps = userLocation?.lat != null && userLocation?.lng != null && !isNaN(Number(userLocation.lat)) && !isNaN(Number(userLocation.lng));
+  const realGpsLat = hasRealGps ? Number(userLocation.lat) : null;
+  const realGpsLng = hasRealGps ? Number(userLocation.lng) : null;
+  const destLat = destination?.coordinates?.lat != null && !isNaN(Number(destination.coordinates.lat)) ? Number(destination.coordinates.lat) : null;
+  const destLng = destination?.coordinates?.lng != null && !isNaN(Number(destination.coordinates.lng)) ? Number(destination.coordinates.lng) : null;
 
   const currentViewportRef = useRef({
-    lat: startLat,
-    lon: startLng,
+    lat: realGpsLat,
+    lon: realGpsLng,
     radius: 5000,
     limit: 15
   });
@@ -494,7 +490,7 @@ export default function MapPage() {
         style={{ touchAction: 'none' }}
       >
         <MapContainer
-          center={[startLat, startLng]}
+          center={[realGpsLat ?? (destLat ?? 15.3990), realGpsLng ?? (destLng ?? 73.8115)]}
           zoom={16}
           scrollWheelZoom={false}
           zoomControl={true}
@@ -531,7 +527,7 @@ export default function MapPage() {
 
           {/* Fit map view only after route is calculated */}
           <RouteBoundsFitter
-            currentCoords={{ lat: startLat, lng: startLng }}
+            currentCoords={hasRealGps ? { lat: realGpsLat, lng: realGpsLng } : null}
             destCoords={destLat != null && destLng != null ? { lat: destLat, lng: destLng } : null}
             accessibleCoords={accessibleRouteCoords}
             hasCalculatedRoute={hasCalculatedRoute}
@@ -565,7 +561,7 @@ export default function MapPage() {
           {/* User Current Location Marker — ONLY rendered when real GPS position is confirmed */}
           {hasRealGps && (
             <Marker
-              position={[Number(userLocation.lat), Number(userLocation.lng)]}
+              position={[realGpsLat, realGpsLng]}
               icon={userLiveIcon}
             >
               <Popup>
@@ -897,11 +893,14 @@ export default function MapPage() {
                   setHasCalculatedRoute(false);
                   setShowExplanation(false);
                 } else {
+                  console.log('[RAASTA DEBUG] 1. START GUIDANCE CLICK');
+
                   // 1. Verify destination exists
-                  if (!destination?.coordinates?.lat || !destination?.coordinates?.lng) {
+                  if (destLat == null || destLng == null) {
+                    console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION: Destination coordinates missing or invalid');
                     showVisualToast({
                       title: 'Select Destination',
-                      subtitle: 'Select a destination first.',
+                      subtitle: 'Please select a destination first.',
                       type: 'error'
                     });
                     if (triggerHaptic) triggerHaptic([100, 50, 100]);
@@ -909,31 +908,24 @@ export default function MapPage() {
                     return;
                   }
 
-                  // 2. Verify GPS exists
-                  const effectiveStart = userLocation?.lat != null && userLocation?.lng != null
-                    ? { lat: Number(userLocation.lat), lng: Number(userLocation.lng) }
-                    : (origin?.coordinates?.lat != null && origin?.coordinates?.lng != null
-                      ? { lat: Number(origin.coordinates.lat), lng: Number(origin.coordinates.lng) }
-                      : null);
-
-                  if (!effectiveStart) {
+                  // 2. Verify REAL GPS exists - STRICTLY NO FAKE COORDINATES
+                  if (!hasRealGps) {
+                    console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION: Real GPS location is unavailable');
                     showVisualToast({
-                      title: 'Waiting for your location...',
-                      subtitle: 'Current location unavailable. Please enable location access.',
+                      title: 'Location Unavailable',
+                      subtitle: 'GPS location not available. Please ensure location services are enabled.',
                       type: 'error'
                     });
                     return;
                   }
 
                   const realGpsStart = {
-                    lat: effectiveStart.lat,
-                    lng: effectiveStart.lng
+                    lat: realGpsLat,
+                    lng: realGpsLng
                   };
 
-                  console.log('[RAASTA] Start Guidance pressed');
-                  console.log('[RAASTA] GPS:', realGpsStart);
-                  console.log('[RAASTA] Destination:', destination);
-                  console.log('[RAASTA] Sending route request...');
+                  console.log('[RAASTA DEBUG] 2. GPS coordinates being used as start:', realGpsStart);
+                  console.log('[RAASTA DEBUG] 3. fixed destination coordinates:', { lat: destLat, lng: destLng });
 
                   try {
                     const result = await requestRouteCalculation(
@@ -943,9 +935,8 @@ export default function MapPage() {
                       liveIncidents
                     );
 
-                    console.log('[RAASTA] Backend response:', result);
-
                     if (!result || !result.success) {
+                      console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION: Route calculation returned unsuccess:', result);
                       setHasCalculatedRoute(false);
                       showVisualToast({
                         title: 'Routing Error',
@@ -955,12 +946,14 @@ export default function MapPage() {
                       return;
                     }
 
-                    console.log('[RAASTA] Starting GPS guidance:');
+                    console.log('[RAASTA DEBUG] 16. setHasCalculatedRoute(true)');
                     setHasCalculatedRoute(true);
+
+                    console.log('[RAASTA DEBUG] 17. startGpsGuidance()');
                     startGpsGuidance();
                   } catch (err) {
+                    console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION in Start Guidance handler:', err);
                     setHasCalculatedRoute(false);
-                    console.error('[RAASTA] Route calculation failed:', err);
                     showVisualToast({
                       title: 'Route Calculation Failed',
                       subtitle: err?.message || 'RAASTA could not calculate an accessible route.',
