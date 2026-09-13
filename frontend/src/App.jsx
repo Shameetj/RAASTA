@@ -2,8 +2,7 @@ import React from 'react';
 import { useNavigation } from './context/NavigationContext';
 import MobileAppLayout from './components/MobileAppLayout';
 import BottomTabBar from './components/BottomTabBar';
-import VisualAlertBanner from './components/VisualAlertBanner';
-import CivicDashboardModal from './components/CivicDashboardModal';
+
 import HomePage from './pages/HomePage';
 import ProfileSelectionPage from './pages/ProfileSelectionPage';
 import DestinationPage from './pages/DestinationPage';
@@ -13,10 +12,12 @@ import BarrierReportPage from './pages/BarrierReportPage';
 
 export default function App() {
   const { currentStep } = useNavigation();
+
   const isMapScreen = currentStep === 'map';
 
   return (
     <MobileAppLayout>
+
       <div
         className={
           isMapScreen
@@ -24,20 +25,38 @@ export default function App() {
             : 'flex-1 w-full overflow-y-auto pb-20 relative'
         }
       >
-        {currentStep === 'home' && <HomePage />}
-        {currentStep === 'profile' && <ProfileSelectionPage />}
-        {currentStep === 'destination' && <DestinationPage />}
-        {currentStep === 'map' && <MapPage />}
-        {currentStep === 'results' && <RouteResultsPage />}
-        {currentStep === 'report' && <BarrierReportPage />}
+
+        {currentStep === 'home' && (
+          <HomePage />
+        )}
+
+        {currentStep === 'profile' && (
+          <ProfileSelectionPage />
+        )}
+
+        {currentStep === 'destination' && (
+          <DestinationPage />
+        )}
+
+        {currentStep === 'map' && (
+          <MapPage />
+        )}
+
+        {currentStep === 'results' && (
+          <RouteResultsPage />
+        )}
+
+        {currentStep === 'report' && (
+          <BarrierReportPage />
+        )}
+
       </div>
 
-      <VisualAlertBanner />
-      <CivicDashboardModal />
-
+      {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto z-30">
         <BottomTabBar />
       </div>
+
     </MobileAppLayout>
   );
 }

@@ -8,9 +8,7 @@
  * Dev2 may need to query OSRM multiple times.
  */
 
-const PRIMARY_URL =
-  import.meta.env.VITE_API_URL ||
-  'http://26.110.10.242:8000/api';
+const PRIMARY_URL = import.meta.env.VITE_API_URL || 'https://teach-ladies-plans-mega.trycloudflare.com/api';
 
 const LOCAL_FALLBACK_URL =
   'http://localhost:8000/api';
@@ -288,4 +286,17 @@ export async function resetDemoData() {
     },
     10000
   );
+}
+
+export async function deleteBlockage(blockageId) {
+  if (!blockageId) {
+    throw new Error('Blockage ID is required');
+  }
+
+  return await resilientFetch(`/blockages/${blockageId}`, {
+    method: 'DELETE',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
 }

@@ -7,7 +7,13 @@ import {
   INITIAL_ACCESSIBLE_FEATURES,
   DEAF_MODE_ALERTS
 } from '../data/mockData';
-import { fetchLocations, fetchBlockages, calculateRoute, reportBlockage } from '../api/apiClient';
+import {
+  fetchLocations,
+  fetchBlockages,
+  calculateRoute,
+  reportBlockage,
+  deleteBlockage
+} from '../api/apiClient';
 import { extractBackendRouteCoordinates } from '../utils/geoUtils';
 
 const NavigationContext = createContext(null);
@@ -319,7 +325,7 @@ export function NavigationProvider({ children }) {
     async function initData() {
       try {
         const blocks = await fetchBlockages();
-        if (blocks && Array.isArray(blocks) && blocks.length > 0) {
+        if (Array.isArray(blocks)) {
           const normalized = blocks.map((b, idx) => {
             const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
             const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
@@ -349,9 +355,7 @@ export function NavigationProvider({ children }) {
             };
           }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
 
-          if (normalized.length > 0) {
-            setBarriers(normalized);
-          }
+          setBarriers(normalized);
         }
       } catch (err) {
         console.warn('[RAASTA] Blockages fetch warning:', err);
@@ -858,6 +862,50 @@ export function NavigationProvider({ children }) {
     };
   }, []);
 
+  const removeBarrierReport = async (barrierId) => {
+    if (!barrierId) {
+      throw new Error('Invalid blockage ID');
+    }
+
+    try {
+      console.log('[RAASTA] Removing blockage:', barrierId);
+
+      await deleteBlockage(barrierId);
+
+      setBarriers(prev =>
+        prev.filter(barrier => String(barrier.id) !== String(barrierId))
+      );
+
+      showVisualToast({
+        title: 'Blockage Removed',
+        subtitle: 'The report is no longer active.',
+        type: 'success'
+      });
+
+      // Refresh the route using the remaining active blockages.
+      try {
+        await requestRouteCalculation(destination, selectedProfileId);
+      } catch (routeError) {
+        console.warn(
+          '[RAASTA] Route refresh after blockage removal failed:',
+          routeError
+        );
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[RAASTA] Failed to remove blockage:', error);
+
+      showVisualToast({
+        title: 'Remove Failed',
+        subtitle: 'Unable to remove this blockage.',
+        type: 'error'
+      });
+
+      throw error;
+    }
+  };
+
   const value = {
     currentStep,
     setCurrentStep,
@@ -896,6 +944,7 @@ export function NavigationProvider({ children }) {
     emergencyStrobeActive,
     setEmergencyStrobeActive,
     addBarrierReport,
+    removeBarrierReport,
     civicModalOpen,
     setCivicModalOpen,
     requestRouteCalculation,

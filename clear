@@ -1,0 +1,127 @@
+[1mdiff --git a/backend/developer2/routing/route_service.py b/backend/developer2/routing/route_service.py[m
+[1mindex df5c510..91691c8 100644[m
+[1m--- a/backend/developer2/routing/route_service.py[m
+[1m+++ b/backend/developer2/routing/route_service.py[m
+[36m@@ -6,12 +6,19 @@[m [mdeveloper2_path = Path(__file__).resolve().parent.parent[m
+ [m
+ sys.path.append(str(developer2_path / "pathfinding"))[m
+ sys.path.append(str(developer2_path / "accessibility"))[m
+[32m+[m[32msys.path.append(str(developer2_path / "routing"))[m
+ [m
+ from dijkstra import dijkstra[m
+ from collision import detect_route_blockages[m
+ from detour import find_alternative_route[m
+ from alerts import create_blockage_alert[m
+[31m-from blockage_client import get_blockages_for_route[m
+[32m+[m[32mfrom blockage_client import ([m
+[32m+[m[32m    get_blockages_for_route,[m
+[32m+[m[32m    get_active_blockages,[m
+[32m+[m[32m)[m
+[32m+[m
+[32m+[m[32mfrom accessible_route import calculate_accessible_route[m
+[32m+[m[32mfrom routing_provider import OSRMError[m
+ [m
+ [m
+ def get_route_coordinates(graph, path):[m
+[36m@@ -121,4 +128,98 @@[m [mdef calculate_route([m
+         "route": alternative_route,[m
+         "alerts": alerts,[m
+         "blockages": detected_blockages,[m
+[31m-    }[m
+\ No newline at end of file[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m
+[32m+[m[32mdef calculate_route_from_coordinates([m
+[32m+[m[32m    start_latitude: float,[m
+[32m+[m[32m    start_longitude: float,[m
+[32m+[m[32m    destination_latitude: float,[m
+[32m+[m[32m    destination_longitude: float,[m
+[32m+[m[32m    active_blockages: list[dict] | None = None,[m
+[32m+[m[32m    profile: str = "wheelchair",[m
+[32m+[m[32m) -> dict:[m
+[32m+[m[32m    """[m
+[32m+[m[32m    Public Dev1 -> Dev2 routing interface.[m
+[32m+[m
+[32m+[m[32m    Uses real latitude/longitude coordinates and OSRM.[m
+[32m+[m
+[32m+[m[32m    Wheelchair:[m
+[32m+[m[32m        Detect physical accessibility blockages and reroute[m
+[32m+[m[32m        using clear OSRM alternatives.[m
+[32m+[m
+[32m+[m[32m    Deaf:[m
+[32m+[m[32m        Use the normal walking route without wheelchair-specific[m
+[32m+[m[32m        physical blockage rerouting.[m
+[32m+[m[32m    """[m
+[32m+[m
+[32m+[m[32m    # Validate profile[m
+[32m+[m[32m    if profile not in {"wheelchair", "deaf"}:[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "success": False,[m
+[32m+[m[32m            "message": ([m
+[32m+[m[32m                "Invalid profile. Expected 'wheelchair' or 'deaf'."[m
+[32m+[m[32m            ),[m
+[32m+[m[32m            "profile": profile,[m
+[32m+[m[32m            "route": None,[m
+[32m+[m[32m            "alerts": [],[m
+[32m+[m[32m            "blockages": [],[m
+[32m+[m[32m            "rerouted": False,[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    # If Dev1 did not provide blockages, fetch active blockages.[m
+[32m+[m[32m    if active_blockages is None:[m
+[32m+[m[32m        try:[m
+[32m+[m[32m            active_blockages = get_active_blockages()[m
+[32m+[m[32m        except Exception as exc:[m
+[32m+[m[32m            return {[m
+[32m+[m[32m                "success": False,[m
+[32m+[m[32m                "message": ([m
+[32m+[m[32m                    f"Failed to retrieve active blockages: {exc}"[m
+[32m+[m[32m                ),[m
+[32m+[m[32m                "profile": profile,[m
+[32m+[m[32m                "route": None,[m
+[32m+[m[32m                "alerts": [],[m
+[32m+[m[32m                "blockages": [],[m
+[32m+[m[32m                "rerouted": False,[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        result = calculate_accessible_route([m
+[32m+[m[32m            start_latitude=start_latitude,[m
+[32m+[m[32m            start_longitude=start_longitude,[m
+[32m+[m[32m            destination_latitude=destination_latitude,[m
+[32m+[m[32m            destination_longitude=destination_longitude,[m
+[32m+[m[32m            active_blockages=active_blockages,[m
+[32m+[m[32m            profile=profile,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    except OSRMError as exc:[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "success": False,[m
+[32m+[m[32m            "message": str(exc),[m
+[32m+[m[32m            "profile": profile,[m
+[32m+[m[32m            "route": None,[m
+[32m+[m[32m            "alerts": [],[m
+[32m+[m[32m            "blockages": [],[m
+[32m+[m[32m            "rerouted": False,[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    except Exception as exc:[m
+[32m+[m[32m        return {[m
+[32m+[m[32m            "success": False,[m
+[32m+[m[32m            "message": f"Routing request failed: {exc}",[m
+[32m+[m[32m            "profile": profile,[m
+[32m+[m[32m            "route": None,[m
+[32m+[m[32m            "alerts": [],[m
+[32m+[m[32m            "blockages": [],[m
+[32m+[m[32m            "rerouted": False,[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m    # Ensure the public response always contains these fields.[m
+[32m+[m[32m    result["profile"] = profile[m
+[32m+[m[32m    result.setdefault("alerts", [])[m
+[32m+[m[32m    result.setdefault("blockages", [])[m
+[32m+[m[32m    result.setdefault("rerouted", False)[m
+[32m+[m
+[32m+[m[32m    return result[m
+\ No newline at end of file[m

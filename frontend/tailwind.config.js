@@ -12,17 +12,17 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
-          900: '#14532d',
+          50: '#fff7ed',
+          100: '#ffedd5',
+          500: '#f97316',
+          600: '#ea580c',
+          700: '#c2410c',
+          900: '#7c2d12',
         },
         accessible: {
-          safe: '#10b981',
-          warning: '#f59e0b',
-          danger: '#ef4444',
+          safe: '#f59e0b',
+          warning: '#ef4444',
+          danger: '#dc2626',
           cyan: '#06b6d4',
           indigo: '#6366f1',
           purple: '#a855f7',
