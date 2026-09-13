@@ -225,6 +225,8 @@ export default function MapPage() {
     userLocation,
     gpsAccuracy,
     locationError,
+    currentStep,
+    setCurrentStep,
     startGpsGuidance,
     stopGpsGuidance,
     triggerHaptic,
@@ -774,16 +776,43 @@ export default function MapPage() {
           </div>
         )}
 
-        {/* Destination Selector: Real backend locations from Dev1/Dev2 */}
+        {/* Destination Selector: Real backend locations from Dev1/Dev2 & Custom Map Pin */}
         {Array.isArray(destinations) && (
           <div className="space-y-1.5 pb-2 border-b border-slate-800">
             <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
               <span>Choose Destination:</span>
-              <span className="text-cyan-400 font-normal">
-                {destination?.category === 'Map Pin' ? 'Custom Destination' : 'Backend Verified'}
-              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isNavSimulating || hasCalculatedRoute) {
+                    stopGpsGuidance();
+                    setHasCalculatedRoute(false);
+                    setShowExplanation(false);
+                  }
+                  setCurrentStep('destination');
+                  if (triggerHaptic) triggerHaptic([30]);
+                }}
+                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <span>+ Pick / Pin on Map</span>
+              </button>
             </div>
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              {/* Custom Pin Chip if selected */}
+              {destination?.category === 'Map Pin' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentStep('destination');
+                    if (triggerHaptic) triggerHaptic([30]);
+                  }}
+                  className="flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all touch-active bg-cyan-950/90 border border-cyan-400 text-cyan-200 shadow-md shadow-cyan-950/50 ring-1 ring-cyan-400"
+                >
+                  <MapPin className="w-3 h-3 text-cyan-400 animate-pulse" />
+                  <span>📍 {destination.name || 'Custom Pinned Pin'}</span>
+                </button>
+              )}
+
               {destinations.map((loc) => {
                 const isSelected = destination?.id === loc.id;
                 return (
@@ -815,6 +844,24 @@ export default function MapPage() {
                   </button>
                 );
               })}
+
+              {/* Explicit Pick on Map chip */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isNavSimulating || hasCalculatedRoute) {
+                    stopGpsGuidance();
+                    setHasCalculatedRoute(false);
+                    setShowExplanation(false);
+                  }
+                  setCurrentStep('destination');
+                  if (triggerHaptic) triggerHaptic([30]);
+                }}
+                className="flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all touch-active bg-emerald-950/40 border border-emerald-600/60 text-emerald-300 hover:bg-emerald-900/50"
+              >
+                <MapPin className="w-3 h-3 text-emerald-400" />
+                <span>+ Custom Pin</span>
+              </button>
             </div>
           </div>
         )}
@@ -850,9 +897,28 @@ export default function MapPage() {
                   setHasCalculatedRoute(false);
                   setShowExplanation(false);
                 } else {
-                  if (!hasRealGps) {
+                  // 1. Verify destination exists
+                  if (!destination?.coordinates?.lat || !destination?.coordinates?.lng) {
                     showVisualToast({
-                      title: 'Location Unavailable',
+                      title: 'Select Destination',
+                      subtitle: 'Select a destination first.',
+                      type: 'error'
+                    });
+                    if (triggerHaptic) triggerHaptic([100, 50, 100]);
+                    setCurrentStep('destination');
+                    return;
+                  }
+
+                  // 2. Verify GPS exists
+                  const effectiveStart = userLocation?.lat != null && userLocation?.lng != null
+                    ? { lat: Number(userLocation.lat), lng: Number(userLocation.lng) }
+                    : (origin?.coordinates?.lat != null && origin?.coordinates?.lng != null
+                      ? { lat: Number(origin.coordinates.lat), lng: Number(origin.coordinates.lng) }
+                      : null);
+
+                  if (!effectiveStart) {
+                    showVisualToast({
+                      title: 'Waiting for your location...',
                       subtitle: 'Current location unavailable. Please enable location access.',
                       type: 'error'
                     });
@@ -860,24 +926,44 @@ export default function MapPage() {
                   }
 
                   const realGpsStart = {
-                    lat: startLat,
-                    lng: startLng
+                    lat: effectiveStart.lat,
+                    lng: effectiveStart.lng
                   };
 
+                  console.log('[RAASTA] Start Guidance pressed');
+                  console.log('[RAASTA] GPS:', realGpsStart);
+                  console.log('[RAASTA] Destination:', destination);
+                  console.log('[RAASTA] Sending route request...');
+
                   try {
-                    await requestRouteCalculation(
+                    const result = await requestRouteCalculation(
                       destination,
                       selectedProfileId,
                       realGpsStart,
                       liveIncidents
                     );
+
+                    console.log('[RAASTA] Backend response:', result);
+
+                    if (!result || !result.success) {
+                      setHasCalculatedRoute(false);
+                      showVisualToast({
+                        title: 'Routing Error',
+                        subtitle: 'RAASTA could not calculate an accessible route.',
+                        type: 'error'
+                      });
+                      return;
+                    }
+
+                    console.log('[RAASTA] Starting GPS guidance:');
                     setHasCalculatedRoute(true);
                     startGpsGuidance();
                   } catch (err) {
-                    console.error('[RAASTA] Start Guidance route calculation failed:', err);
+                    setHasCalculatedRoute(false);
+                    console.error('[RAASTA] Route calculation failed:', err);
                     showVisualToast({
                       title: 'Route Calculation Failed',
-                      subtitle: err.message || 'Please try again.',
+                      subtitle: err?.message || 'RAASTA could not calculate an accessible route.',
                       type: 'error'
                     });
                   }

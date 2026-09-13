@@ -64,7 +64,7 @@ export function NavigationProvider({ children }) {
     coordinates: null
   }));
   const [destinations, setDestinations] = useState(DEMO_DESTINATIONS);
-  const [destination, setDestination] = useState(DEMO_DESTINATIONS[0]);
+  const [destination, setDestination] = useState(null);
 
   const [barriers, setBarriers] = useState(INITIAL_BARRIERS);
   const [accessibleFeatures, setAccessibleFeatures] = useState(INITIAL_ACCESSIBLE_FEATURES);
@@ -228,136 +228,142 @@ export function NavigationProvider({ children }) {
         blockages: unifiedBlockages
       });
 
-      if (result) {
-        console.log('[RAASTA] Received calculated route from backend:', result);
-        setApiError(null);
-
-        // 1. Extract backend accessible coordinates (Backend -> coordinates -> Leaflet Polyline)
-        const routeData = result.route || result;
-        const backendAccessibleCoords = extractBackendRouteCoordinates(
-          routeData.coordinates ||
-          routeData ||
-          result.alternative_route ||
-          result.accessible_route ||
-          result.safe_route ||
-          (result.coordinates ? result : null) ||
-          (result.routes && result.routes[0] ? result.routes[0] : null)
-        );
-
-        // 2. Extract backend direct coordinates
-        const backendDirectCoords = extractBackendRouteCoordinates(
-          result.direct_route ||
-          result.fastest_route ||
-          (result.routes && result.routes[1] ? result.routes[1] : null)
-        );
-
-        // 3. Extract actual backend distance, duration, rerouted status, alerts
-        const rawDistance = routeData.distance_meters !== undefined
-          ? Number(routeData.distance_meters)
-          : (routeData.distance !== undefined ? Number(routeData.distance) : null);
-        const distanceMeters = rawDistance !== null ? Math.round(rawDistance * 10) / 10 : null;
-
-        const rawDuration = routeData.duration_seconds !== undefined
-          ? Number(routeData.duration_seconds)
-          : (routeData.duration !== undefined ? Number(routeData.duration) : null);
-        const durationSeconds = rawDuration !== null ? Number(rawDuration) : null;
-        const durationMinutes = durationSeconds !== null ? Math.max(1, Math.round(durationSeconds / 60)) : null;
-        const isRerouted = Boolean(result.rerouted);
-        const alertsList = Array.isArray(result.alerts) ? result.alerts : (Array.isArray(result.visual_alerts) ? result.visual_alerts : []);
-
-        // 4. Real score ONLY if returned by backend (do NOT fabricate)
-        const realScore = result.accessibility_score?.score ?? result.score ?? routeData.score ?? null;
-        const realScoreRating = result.accessibility_score?.grade ?? result.score_rating ?? null;
-
-        // Update state with genuine backend route information
-        setRoutes(prev => ({
-          fastest: {
-            ...prev.fastest,
-            name: result.direct_route?.name || 'Direct Route',
-            durationMinutes: result.direct_route?.duration_seconds ? Math.round(result.direct_route.duration_seconds / 60) : null,
-            distanceMeters: result.direct_route?.distance_meters ?? null,
-            isBlocked: isRerouted,
-            blockedReason: alertsList.length > 0 ? (typeof alertsList[0] === 'string' ? alertsList[0] : alertsList[0].message) : (isRerouted ? 'Blockage detected on direct route' : null),
-            score: null,
-            coordinates: backendDirectCoords.length > 0 ? backendDirectCoords : []
-          },
-          accessible: {
-            ...prev.accessible,
-            name: isRerouted ? 'Alternative Accessible Route' : 'Accessible Route',
-            durationMinutes: durationMinutes,
-            durationSeconds: durationSeconds,
-            distanceMeters: distanceMeters,
-            rerouted: isRerouted,
-            status: isRerouted ? '✓ Alternative route found' : '✓ Accessible route found',
-            score: realScore,
-            scoreRating: realScoreRating,
-            alerts: alertsList,
-            message: result.message || (isRerouted ? 'Alternative detour route calculated to bypass blockage.' : 'Accessible route calculated successfully.'),
-            summary: isRerouted ? 'Detour around blockage.' : 'Direct step-free route.',
-            segments: (result.turn_by_turn || result.segments || result.steps)?.map(t => ({
-              text: t.instruction || t.text || t.description,
-              distance: t.distance || '',
-              safe: !t.is_hazard && t.safe !== false,
-              highlight: t.highlight || t.visual_cue || ''
-            })) || [],
-            coordinates: backendAccessibleCoords
-          }
-        }));
-
-        // Parse Backend Alerts for deaf/visual mode
-        if (alertsList.length > 0) {
-          setDeafAlerts(alertsList.map((a, i) => ({
-            id: `alert-backend-${i}`,
-            title: typeof a === 'string' ? 'Blockage detected' : (a.title || 'Blockage detected'),
-            subtitle: typeof a === 'string' ? a : (a.message || ''),
-            type: 'hazard',
-            severity: (typeof a === 'object' && a.severity) || 'high',
-            timestamp: 'Real-time'
-          })));
-        }
-
-        // Parse Backend Blockages
-        if (result.blockages && Array.isArray(result.blockages) && result.blockages.length > 0) {
-          const parsedBlockages = result.blockages.map((b, i) => {
-            const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
-            const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
-            const rawType = (b.type || 'stairs').toLowerCase();
-            const typeLabel = rawType === 'stairs' ? 'Stairs' : (rawType.charAt(0).toUpperCase() + rawType.slice(1));
-            const severity = (b.severity || 'high').toLowerCase();
-            const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
-            const description = b.description || (rawType === 'stairs' ? 'Stairs blocking sidewalk' : `${typeLabel} blocking sidewalk`);
-
-            return {
-              id: b.id || `barr-backend-${i}-${lat}-${lng}`,
-              title: b.title || typeLabel,
-              type: rawType,
-              typeLabel: typeLabel,
-              severity: severity,
-              severityLabel: severityLabel,
-              locationName: b.location_name || b.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
-              coordinates: { lat, lng },
-              reportedAt: 'Verified by Backend',
-              verificationStatus: 'Verified by Backend',
-              decayStatus: 'Active',
-              description: description,
-              isOnRouteA: true,
-              isOnRouteB: false
-            };
-          }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
-
-          if (parsedBlockages.length > 0) {
-            setBarriers(parsedBlockages);
-          }
-        }
-
-        return result;
+      if (!result || !result.success) {
+        throw new Error(result?.message || 'RAASTA could not calculate an accessible route.');
       }
+
+      console.log('[RAASTA] Received calculated route from backend:', result);
+      setApiError(null);
+
+      // 1. Extract backend accessible coordinates (Backend -> coordinates -> Leaflet Polyline)
+      const routeData = result.route || result;
+      const backendAccessibleCoords = extractBackendRouteCoordinates(
+        routeData.coordinates ||
+        routeData ||
+        result.alternative_route ||
+        result.accessible_route ||
+        result.safe_route ||
+        (result.coordinates ? result : null) ||
+        (result.routes && result.routes[0] ? result.routes[0] : null)
+      );
+
+      if (!backendAccessibleCoords || backendAccessibleCoords.length < 2) {
+        throw new Error('RAASTA could not calculate an accessible route. Invalid geometry.');
+      }
+
+      // 2. Extract backend direct coordinates
+      const backendDirectCoords = extractBackendRouteCoordinates(
+        result.direct_route ||
+        result.fastest_route ||
+        (result.routes && result.routes[1] ? result.routes[1] : null)
+      );
+
+      // 3. Extract actual backend distance, duration, rerouted status, alerts
+      const rawDistance = routeData.distance_meters !== undefined
+        ? Number(routeData.distance_meters)
+        : (routeData.distance !== undefined ? Number(routeData.distance) : null);
+      const distanceMeters = rawDistance !== null ? Math.round(rawDistance * 10) / 10 : null;
+
+      const rawDuration = routeData.duration_seconds !== undefined
+        ? Number(routeData.duration_seconds)
+        : (routeData.duration !== undefined ? Number(routeData.duration) : null);
+      const durationSeconds = rawDuration !== null ? Number(rawDuration) : null;
+      const durationMinutes = durationSeconds !== null ? Math.max(1, Math.round(durationSeconds / 60)) : null;
+      const isRerouted = Boolean(result.rerouted);
+      const alertsList = Array.isArray(result.alerts) ? result.alerts : (Array.isArray(result.visual_alerts) ? result.visual_alerts : []);
+
+      // 4. Real score ONLY if returned by backend (do NOT fabricate)
+      const realScore = result.accessibility_score?.score ?? result.score ?? routeData.score ?? null;
+      const realScoreRating = result.accessibility_score?.grade ?? result.score_rating ?? null;
+
+      // Update state with genuine backend route information
+      setRoutes(prev => ({
+        fastest: {
+          ...prev.fastest,
+          name: result.direct_route?.name || 'Direct Route',
+          durationMinutes: result.direct_route?.duration_seconds ? Math.round(result.direct_route.duration_seconds / 60) : null,
+          distanceMeters: result.direct_route?.distance_meters ?? null,
+          isBlocked: isRerouted,
+          blockedReason: alertsList.length > 0 ? (typeof alertsList[0] === 'string' ? alertsList[0] : alertsList[0].message) : (isRerouted ? 'Blockage detected on direct route' : null),
+          score: null,
+          coordinates: backendDirectCoords.length > 0 ? backendDirectCoords : []
+        },
+        accessible: {
+          ...prev.accessible,
+          name: isRerouted ? 'Alternative Accessible Route' : 'Accessible Route',
+          durationMinutes: durationMinutes,
+          durationSeconds: durationSeconds,
+          distanceMeters: distanceMeters,
+          rerouted: isRerouted,
+          status: isRerouted ? '✓ Alternative route found' : '✓ Accessible route found',
+          score: realScore,
+          scoreRating: realScoreRating,
+          alerts: alertsList,
+          message: result.message || (isRerouted ? 'Alternative detour route calculated to bypass blockage.' : 'Accessible route calculated successfully.'),
+          summary: isRerouted ? 'Detour around blockage.' : 'Direct step-free route.',
+          segments: (result.turn_by_turn || result.segments || result.steps)?.map(t => ({
+            text: t.instruction || t.text || t.description,
+            distance: t.distance || '',
+            safe: !t.is_hazard && t.safe !== false,
+            highlight: t.highlight || t.visual_cue || ''
+          })) || [],
+          coordinates: backendAccessibleCoords
+        }
+      }));
+
+      // Parse Backend Alerts for deaf/visual mode
+      if (alertsList.length > 0) {
+        setDeafAlerts(alertsList.map((a, i) => ({
+          id: `alert-backend-${i}`,
+          title: typeof a === 'string' ? 'Blockage detected' : (a.title || 'Blockage detected'),
+          subtitle: typeof a === 'string' ? a : (a.message || ''),
+          type: 'hazard',
+          severity: (typeof a === 'object' && a.severity) || 'high',
+          timestamp: 'Real-time'
+        })));
+      }
+
+      // Parse Backend Blockages
+      if (result.blockages && Array.isArray(result.blockages) && result.blockages.length > 0) {
+        const parsedBlockages = result.blockages.map((b, i) => {
+          const lat = Number(b.latitude ?? b.lat ?? b.coordinates?.lat);
+          const lng = Number(b.longitude ?? b.lng ?? b.coordinates?.lng);
+          const rawType = (b.type || 'stairs').toLowerCase();
+          const typeLabel = rawType === 'stairs' ? 'Stairs' : (rawType.charAt(0).toUpperCase() + rawType.slice(1));
+          const severity = (b.severity || 'high').toLowerCase();
+          const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
+          const description = b.description || (rawType === 'stairs' ? 'Stairs blocking sidewalk' : `${typeLabel} blocking sidewalk`);
+
+          return {
+            id: b.id || `barr-backend-${i}-${lat}-${lng}`,
+            title: b.title || typeLabel,
+            type: rawType,
+            typeLabel: typeLabel,
+            severity: severity,
+            severityLabel: severityLabel,
+            locationName: b.location_name || b.locationName || `Obstacle at (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+            coordinates: { lat, lng },
+            reportedAt: 'Verified by Backend',
+            verificationStatus: 'Verified by Backend',
+            decayStatus: 'Active',
+            description: description,
+            isOnRouteA: true,
+            isOnRouteB: false
+          };
+        }).filter(b => !isNaN(b.coordinates.lat) && !isNaN(b.coordinates.lng));
+
+        if (parsedBlockages.length > 0) {
+          setBarriers(parsedBlockages);
+        }
+      }
+
+      return result;
     } catch (e) {
       console.error('[RAASTA] Route calculation failed:', e);
-      setApiError('Unable to connect to RAASTA server. Please try again.');
+      setApiError(e?.message || 'Unable to calculate accessible route.');
       showVisualToast({
-        title: 'Connection Error',
-        subtitle: 'Unable to connect to RAASTA server. Please try again.',
+        title: 'Route Calculation Failed',
+        subtitle: e?.message || 'Unable to calculate accessible route.',
         type: 'error'
       });
       throw e;
@@ -388,7 +394,6 @@ export function NavigationProvider({ children }) {
 
           if (normalizedLocs.length > 0) {
             setDestinations(normalizedLocs);
-            setDestination(prev => prev || normalizedLocs[0]);
           }
         }
       } catch (err) {

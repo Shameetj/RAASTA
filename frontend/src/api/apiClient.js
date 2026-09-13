@@ -143,7 +143,8 @@ export async function calculateRoute({ start, destination, profile, blockages = 
   };
 
   // Production flow: React -> Dev1 -> Dev2 -> OSRM -> React.
-  // If Dev1/Dev2 is unavailable, throw real error. No fake walking route fallback.
+  // Dev1 and Dev2 may evaluate multiple OSRM alternatives/detours.
+  // Timeout set to 60000ms (60 seconds) to allow full accessibility routing.
   return await resilientFetch(
     '/routes/calculate',
     {
@@ -154,7 +155,7 @@ export async function calculateRoute({ start, destination, profile, blockages = 
       },
       body: JSON.stringify(payload)
     },
-    8000
+    60000
   );
 }
 
