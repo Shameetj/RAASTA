@@ -31,6 +31,7 @@ def test_no_blockage_routing():
         graph,
         "A",
         "C",
+        active_blockages=[],
         wheelchair=True,
     )
 
