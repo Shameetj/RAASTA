@@ -32,24 +32,29 @@ import {
   ChevronUp,
   Milestone,
   CornerUpRight,
-  ArrowUp
+  ArrowUp,
+  Maximize2,
+  Minimize2,
+  List
 } from 'lucide-react';
 
-// Leaflet Map Resizer to ensure tiles render immediately when tab switches
-function MapResizer() {
+// Leaflet Map Resizer to ensure tiles render immediately when tab switches or bottom drawer collapses/expands
+function MapResizer({ isDetailsExpanded }) {
   const map = useMap();
   useEffect(() => {
     map.invalidateSize();
-    const t1 = setTimeout(() => map.invalidateSize(), 150);
-    const t2 = setTimeout(() => map.invalidateSize(), 600);
+    const t1 = setTimeout(() => map.invalidateSize(), 80);
+    const t2 = setTimeout(() => map.invalidateSize(), 250);
+    const t3 = setTimeout(() => map.invalidateSize(), 500);
     const onResize = () => map.invalidateSize();
     window.addEventListener('resize', onResize);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
       window.removeEventListener('resize', onResize);
     };
-  }, [map]);
+  }, [map, isDetailsExpanded]);
   return null;
 }
 
@@ -254,6 +259,28 @@ export default function MapPage() {
   const [hasCalculatedRoute, setHasCalculatedRoute] = useState(false);
   const [liveIncidents, setLiveIncidents] = useState([]);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
+
+  // Touch gesture handler for swiping up (expand details) or down (big map)
+  const dragStartYRef = useRef(null);
+  const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      dragStartYRef.current = e.touches[0].clientY;
+    }
+  };
+  const handleTouchEnd = (e) => {
+    if (dragStartYRef.current === null) return;
+    const endY = e.changedTouches?.[0]?.clientY;
+    if (endY != null) {
+      const diff = dragStartYRef.current - endY;
+      if (diff > 30) {
+        setIsDetailsExpanded(true); // Swiped up -> expand details
+      } else if (diff < -30) {
+        setIsDetailsExpanded(false); // Swiped down -> big map
+      }
+    }
+    dragStartYRef.current = null;
+  };
 
   // Only treat location as real if acquired from device GPS or stored real fix
   const hasRealGps = userLocation?.lat != null && userLocation?.lng != null && !isNaN(Number(userLocation.lat)) && !isNaN(Number(userLocation.lng));
@@ -625,8 +652,8 @@ export default function MapPage() {
             onViewportChange={handleViewportChange}
           />
 
-          {/* Map resizer to ensure tiles render immediately */}
-          <MapResizer />
+          {/* Map resizer to ensure tiles render immediately on drawer collapse/expand */}
+          <MapResizer isDetailsExpanded={isDetailsExpanded} />
 
           {/* Automatically center map on user's live GPS location on reload and relocate on stop */}
           <UserLocationMapCenterer
@@ -919,6 +946,28 @@ export default function MapPage() {
           )}
         </div>
 
+        {/* Floating Quick Map Size Toggle (Big Map vs Details) */}
+        <div className="absolute top-3 right-3 z-[500] pointer-events-auto">
+          <button
+            type="button"
+            title={isDetailsExpanded ? "Maximize Map" : "Show Route Details"}
+            onClick={() => setIsDetailsExpanded(prev => !prev)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/95 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-emerald-400 text-xs font-bold shadow-xl backdrop-blur-md transition-all touch-active"
+          >
+            {isDetailsExpanded ? (
+              <>
+                <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Big Map</span>
+              </>
+            ) : (
+              <>
+                <List className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Details</span>
+              </>
+            )}
+          </button>
+        </div>
+
         {/* Loading Overlay */}
         {isCalculatingRoute && (
           <div className="absolute top-3 left-3 right-3 z-[1000] p-3 rounded-xl bg-slate-900/95 border border-emerald-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
@@ -928,8 +977,36 @@ export default function MapPage() {
         )}
       </div>
 
-      {/* 2. Bottom Route & Accessibility Status Panel */}
-      <div className="w-full flex-shrink-0 p-3 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-lg space-y-3 z-[1000] max-h-[46vh] overflow-y-auto">
+      {/* 2. Bottom Route & Accessibility Status Drawer (Swipe Up / Down & Tap to Toggle) */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className={`w-full flex-shrink-0 p-3 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-2xl space-y-2.5 z-[1000] transition-all duration-300 ease-out ${
+          isDetailsExpanded
+            ? 'max-h-[62vh] overflow-y-auto ring-1 ring-emerald-500/30'
+            : 'max-h-[145px] overflow-hidden'
+        }`}
+      >
+        {/* Interactive Drag & Toggle Pill Handle */}
+        <div
+          onClick={() => setIsDetailsExpanded(prev => !prev)}
+          className="w-full flex flex-col items-center justify-center -mt-1 pb-1 cursor-pointer select-none group touch-active"
+        >
+          <div className="w-12 h-1.5 rounded-full bg-slate-700 group-hover:bg-emerald-500/80 transition-colors" />
+          <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 group-hover:text-emerald-300 mt-1 transition-colors">
+            {isDetailsExpanded ? (
+              <>
+                <ChevronDown className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
+                <span>Scroll down / Tap to see BIG MAP</span>
+              </>
+            ) : (
+              <>
+                <ChevronUp className="w-3.5 h-3.5 text-cyan-400 animate-bounce" />
+                <span>Scroll up / Tap for WAYMARKS & DETAILS</span>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Enhanced Rerouting Alert Banner (Improvement 5) */}
         {hasCalculatedRoute && routes?.accessible?.rerouted && (
