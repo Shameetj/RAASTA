@@ -981,96 +981,6 @@ export default function MapPage() {
           </div>
         )}
 
-        {/* Destination Selector: Real backend locations from Dev1/Dev2 & Custom Map Pin */}
-        {Array.isArray(destinations) && (
-          <div className="space-y-1.5 pb-2 border-b border-slate-800">
-            <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
-              <span>Choose Destination:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isNavSimulating || hasCalculatedRoute) {
-                    stopGpsGuidance();
-                    setHasCalculatedRoute(false);
-                    setShowExplanation(false);
-                  }
-                  setCurrentStep('destination');
-                  if (triggerHaptic) triggerHaptic([30]);
-                }}
-                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <span>+ Pick / Pin on Map</span>
-              </button>
-            </div>
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-              {/* Custom Pin Chip if selected */}
-              {destination?.category === 'Map Pin' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentStep('destination');
-                    if (triggerHaptic) triggerHaptic([30]);
-                  }}
-                  className="flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all touch-active bg-cyan-950/90 border border-cyan-400 text-cyan-200 shadow-md shadow-cyan-950/50 ring-1 ring-cyan-400"
-                >
-                  <MapPin className="w-3 h-3 text-cyan-400 animate-pulse" />
-                  <span>📍 {destination.name || 'Custom Pinned Pin'}</span>
-                </button>
-              )}
-
-              {destinations.map((loc) => {
-                const isSelected = destination?.id === loc.id;
-                return (
-                  <button
-                    key={loc.id}
-                    type="button"
-                    onClick={() => {
-                      if (isNavSimulating || hasCalculatedRoute) {
-                        stopGpsGuidance();
-                        setHasCalculatedRoute(false);
-                        setShowExplanation(false);
-                      }
-                      setDestination(loc);
-                      triggerHaptic([30]);
-                      showVisualToast({
-                        title: loc.name,
-                        subtitle: `${loc.subtitle || loc.category || 'Backend Verified'} • Ready to guide`,
-                        type: 'info'
-                      });
-                    }}
-                    className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all touch-active ${
-                      isSelected
-                        ? 'bg-cyan-950/90 border border-cyan-500 text-cyan-200 shadow-md shadow-cyan-950/50'
-                        : 'bg-slate-950/70 border border-slate-800 text-slate-300 hover:border-slate-700'
-                    }`}
-                  >
-                    <MapPin className={`w-3 h-3 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
-                    <span>{loc.name}</span>
-                  </button>
-                );
-              })}
-
-              {/* Explicit Pick on Map chip */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (isNavSimulating || hasCalculatedRoute) {
-                    stopGpsGuidance();
-                    setHasCalculatedRoute(false);
-                    setShowExplanation(false);
-                  }
-                  setCurrentStep('destination');
-                  if (triggerHaptic) triggerHaptic([30]);
-                }}
-                className="flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all touch-active bg-emerald-950/40 border border-emerald-600/60 text-emerald-300 hover:bg-emerald-900/50"
-              >
-                <MapPin className="w-3 h-3 text-emerald-400" />
-                <span>+ Custom Pin</span>
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Main Route Stats & Action Buttons */}
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -1079,16 +989,16 @@ export default function MapPage() {
               <span>
                 {hasCalculatedRoute
                   ? (routes?.accessible?.rerouted ? 'Alternative Accessible Route' : 'RAASTA Accessible Route')
-                  : 'Destination Ready'}
+                  : (destination ? 'Destination Pinned' : 'Set Destination')}
               </span>
             </div>
             <div className="text-sm font-extrabold text-white truncate">
-              {destination?.name || 'Selected Destination'}
+              {destination?.name || 'Tap Map to Pin Destination'}
             </div>
             <div className="text-xs text-slate-400">
               {hasCalculatedRoute && routes?.accessible?.distanceMeters != null
                 ? `${(routes.accessible.distanceMeters / 1000).toFixed(1)} km • ${routes.accessible.durationMinutes || 4} min`
-                : 'Press Start Guidance to calculate safest route'}
+                : (destination ? 'Press Start Guidance to calculate safest route' : 'Tap anywhere on the map to set target')}
             </div>
           </div>
 
