@@ -142,21 +142,43 @@ export async function calculateRoute({ start, destination, profile, blockages = 
     blockages
   };
 
-  // Production flow: React -> Dev1 -> Dev2 -> OSRM -> React.
-  // Dev1 and Dev2 may evaluate multiple OSRM alternatives/detours.
-  // Timeout set to 60000ms (60 seconds) to allow full accessibility routing.
-  return await resilientFetch(
-    '/routes/calculate',
-    {
+  // Debug logging start
+  console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST START');
+  console.log('[RAASTA DEBUG] FRONTEND REQUEST URL: /routes/calculate');
+  console.log('[RAASTA DEBUG] FRONTEND REQUEST PAYLOAD:', payload);
+  const routeStartTime = Date.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  let response;
+  let result;
+  try {
+    response = await fetch('/routes/calculate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify(payload)
-    },
-    60000
-  );
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    console.log('[RAASTA DEBUG] FRONTEND RESPONSE RECEIVED');
+    console.log('[RAASTA DEBUG] FRONTEND RESPONSE STATUS:', response.status);
+    const responseTime = Date.now() - routeStartTime;
+    console.log('[RAASTA DEBUG] FRONTEND RESPONSE TIME:', responseTime, 'ms');
+    result = await response.json();
+    console.log('[RAASTA DEBUG] FRONTEND RESPONSE BODY:', result);
+    console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST SUCCESS');
+  } catch (err) {
+    console.error('[RAASTA DEBUG] FRONTEND ROUTE REQUEST ERROR', err);
+    console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST FINISHED');
+    clearTimeout(timeoutId);
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+    console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST FINISHED');
+  }
+  // End of debug logging
+  return result;
 }
 
 export async function reportBlockage(blockageData) {
