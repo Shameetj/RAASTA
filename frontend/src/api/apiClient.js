@@ -144,7 +144,7 @@ export async function calculateRoute({ start, destination, profile, blockages = 
 
   // Debug logging start
   console.log('[RAASTA DEBUG] FRONTEND ROUTE REQUEST START');
-  console.log('[RAASTA DEBUG] FRONTEND REQUEST URL: /routes/calculate');
+  console.log('[RAASTA DEBUG] FRONTEND REQUEST URL: /api/routes/calculate');
   console.log('[RAASTA DEBUG] FRONTEND REQUEST PAYLOAD:', payload);
   const routeStartTime = Date.now();
   const controller = new AbortController();
@@ -152,7 +152,7 @@ export async function calculateRoute({ start, destination, profile, blockages = 
   let response;
   let result;
   try {
-    response = await fetch('/routes/calculate', {
+    response = await fetch('/api/routes/calculate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
