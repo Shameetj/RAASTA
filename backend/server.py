@@ -18,22 +18,52 @@ BLOCKAGES = [
     {
         "id": 1,
         "type": "stairs",
-        "title": "Pedestrian Stairs (No Ramp)",
-        "description": "Stairs blocking accessible sidewalk",
-        "latitude": 15.4900,
-        "longitude": 73.8270,
+        "title": "Stairs near main entrance",
+        "description": "A staircase blocks the direct wheelchair route.",
+        "latitude": 15.4909,
+        "longitude": 73.8278,
         "severity": "high",
-        "reported_at": "Active"
+        "reported_at": "Verified by Dev1"
     },
     {
         "id": 2,
-        "type": "broken_ramp",
-        "title": "Broken Concrete Lip",
-        "description": "5cm drop hazard on ramp edge",
-        "latitude": 15.4918,
-        "longitude": 73.8290,
+        "type": "blocked_ramp",
+        "title": "Wheelchair ramp blocked",
+        "description": "Construction material is blocking the wheelchair ramp.",
+        "latitude": 15.4915,
+        "longitude": 73.8282,
         "severity": "high",
-        "reported_at": "Active"
+        "reported_at": "Verified by Dev1"
+    },
+    {
+        "id": 3,
+        "type": "blocked_sidewalk",
+        "title": "Sidewalk blocked",
+        "description": "The sidewalk is partially blocked by construction.",
+        "latitude": 15.4920,
+        "longitude": 73.8290,
+        "severity": "medium",
+        "reported_at": "Verified by Dev1"
+    },
+    {
+        "id": 4,
+        "type": "broken_pavement",
+        "title": "Broken pavement",
+        "description": "Uneven pavement may make wheelchair travel difficult.",
+        "latitude": 15.4925,
+        "longitude": 73.8295,
+        "severity": "medium",
+        "reported_at": "Verified by Dev1"
+    },
+    {
+        "id": 5,
+        "type": "construction",
+        "title": "Road construction",
+        "description": "Construction work is blocking part of the pedestrian path.",
+        "latitude": 15.4930,
+        "longitude": 73.8300,
+        "severity": "high",
+        "reported_at": "Verified by Dev1"
     }
 ]
 

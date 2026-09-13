@@ -200,6 +200,18 @@ function RouteBoundsFitter({ currentCoords, destCoords, accessibleCoords, hasCal
   return null;
 }
 
+function DestinationMapPicker({ onSelect }) {
+  useMapEvents({
+    click(e) {
+      onSelect({
+        lat: e.latlng.lat,
+        lng: e.latlng.lng
+      });
+    }
+  });
+  return null;
+}
+
 // Leaflet DivIcon helper
 const createDivIcon = (htmlContent, size = [36, 36]) => {
   return L.divIcon({
@@ -214,7 +226,9 @@ const createDivIcon = (htmlContent, size = [36, 36]) => {
 export default function MapPage() {
   const {
     origin,
+    destinations,
     destination,
+    setDestination,
     routes,
     barriers,
     selectedProfile,
@@ -246,6 +260,40 @@ export default function MapPage() {
     : (origin?.coordinates?.lng ?? 73.8115);
   const destLat = destination?.coordinates?.lat ?? 15.4950;
   const destLng = destination?.coordinates?.lng ?? 73.8310;
+
+  const handleMapDestinationSelect = ({ lat, lng }) => {
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    if (isNaN(latitude) || isNaN(longitude)) return;
+
+    // If guidance was active, reset active route so the user can inspect the new pin and start fresh
+    if (isNavSimulating || hasCalculatedRoute) {
+      stopGpsGuidance();
+      setHasCalculatedRoute(false);
+      setShowExplanation(false);
+    }
+
+    const pinnedDestination = {
+      id: `map-pin-${Date.now()}`,
+      name: 'Pinned Map Location',
+      subtitle: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+      address: `Custom Pinned Point (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
+      category: 'Map Pin',
+      coordinates: {
+        lat: latitude,
+        lng: longitude
+      }
+    };
+
+    setDestination(pinnedDestination);
+    triggerHaptic([40, 20]);
+
+    showVisualToast({
+      title: 'Destination Pinned',
+      subtitle: `${latitude.toFixed(4)}, ${longitude.toFixed(4)} • Press Start Guidance`,
+      type: 'success'
+    });
+  };
 
   const currentViewportRef = useRef({
     lat: startLat,
@@ -497,6 +545,9 @@ export default function MapPage() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             maxZoom={19}
           />
+
+          {/* Interactive Map Destination Picker (Tap map to pinpoint destination) */}
+          <DestinationMapPicker onSelect={handleMapDestinationSelect} />
 
           {/* Dynamic pan & zoom watcher to fetch live incidents */}
           <MapViewportWatcher
@@ -751,6 +802,64 @@ export default function MapPage() {
             </div>
             <div className="text-[11px] text-slate-300">
               Signalized intersection ahead with active pedestrian crossing countdown.
+            </div>
+          </div>
+        )}
+
+        {/* Destination Selector: Real backend locations from Dev1/Dev2 or custom map pin */}
+        {Array.isArray(destinations) && (
+          <div className="space-y-1.5 pb-2 border-b border-slate-800">
+            <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
+              <span>Choose Destination (or tap map to pin):</span>
+              <span className="text-cyan-400 font-normal">
+                {destination?.category === 'Map Pin' ? 'Custom Pinned Point' : 'Backend Verified'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              {/* If user pinned a custom map location, show it as an active chip */}
+              {destination?.category === 'Map Pin' && (
+                <button
+                  type="button"
+                  onClick={() => triggerHaptic([30])}
+                  className="flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-cyan-950/90 border border-cyan-500 text-cyan-200 shadow-md shadow-cyan-950/50 touch-active"
+                >
+                  <MapPin className="w-3 h-3 text-cyan-400" />
+                  <span>📍 Pinned ({destination.coordinates?.lat?.toFixed(3)}, {destination.coordinates?.lng?.toFixed(3)})</span>
+                </button>
+              )}
+
+              {/* Verified Backend Locations from Developer 1 / Developer 2 */}
+              {destinations.map((loc) => {
+                const isSelected = destination?.id === loc.id;
+                return (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    onClick={() => {
+                      if (isNavSimulating || hasCalculatedRoute) {
+                        stopGpsGuidance();
+                        setHasCalculatedRoute(false);
+                        setShowExplanation(false);
+                      }
+                      setDestination(loc);
+                      triggerHaptic([30]);
+                      showVisualToast({
+                        title: loc.name,
+                        subtitle: `${loc.subtitle || loc.category || 'Backend Verified'} • Ready to guide`,
+                        type: 'info'
+                      });
+                    }}
+                    className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all touch-active ${
+                      isSelected
+                        ? 'bg-cyan-950/90 border border-cyan-500 text-cyan-200 shadow-md shadow-cyan-950/50'
+                        : 'bg-slate-950/70 border border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <MapPin className={`w-3 h-3 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
+                    <span>{loc.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

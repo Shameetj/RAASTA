@@ -63,6 +63,7 @@ export function NavigationProvider({ children }) {
     subtitle: 'Acquiring GPS...',
     coordinates: null
   }));
+  const [destinations, setDestinations] = useState(DEMO_DESTINATIONS);
   const [destination, setDestination] = useState(DEMO_DESTINATIONS[0]);
 
   const [barriers, setBarriers] = useState(INITIAL_BARRIERS);
@@ -364,9 +365,36 @@ export function NavigationProvider({ children }) {
     }
   };
 
-  // Fetch dynamic blockages and calculate initial route on mount
+  // Fetch dynamic locations and blockages from backend on mount
   useEffect(() => {
     async function initData() {
+      // 1. Fetch Backend Locations
+      try {
+        const locs = await fetchLocations();
+        if (Array.isArray(locs) && locs.length > 0) {
+          const normalizedLocs = locs.map((l, idx) => {
+            const lat = Number(l.latitude ?? l.lat ?? l.coordinates?.lat);
+            const lng = Number(l.longitude ?? l.lng ?? l.coordinates?.lng);
+            return {
+              id: l.id || `dest-back-${idx}`,
+              name: l.name || 'Accessible Destination',
+              subtitle: l.subtitle || l.category || 'Verified Destination',
+              address: l.address || l.subtitle || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+              category: l.category || 'Transit',
+              coordinates: { lat, lng }
+            };
+          }).filter(l => !isNaN(l.coordinates.lat) && !isNaN(l.coordinates.lng));
+
+          if (normalizedLocs.length > 0) {
+            setDestinations(normalizedLocs);
+            setDestination(prev => prev || normalizedLocs[0]);
+          }
+        }
+      } catch (err) {
+        console.warn('[RAASTA] Locations fetch warning:', err);
+      }
+
+      // 2. Fetch Backend Blockages
       try {
         const blocks = await fetchBlockages();
         if (Array.isArray(blocks)) {
@@ -404,7 +432,6 @@ export function NavigationProvider({ children }) {
       } catch (err) {
         console.warn('[RAASTA] Blockages fetch warning:', err);
       }
-
     }
     initData();
   }, []);
@@ -968,6 +995,8 @@ export function NavigationProvider({ children }) {
     setPreferences,
     origin,
     setOrigin,
+    destinations,
+    setDestinations,
     destination,
     setDestination,
     barriers,
