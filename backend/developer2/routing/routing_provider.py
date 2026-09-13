@@ -106,6 +106,49 @@ def get_route(
     return data
 
 
+def format_osrm_instruction(step: dict) -> str:
+    """
+    Format a clean human-readable turn instruction from real OSRM step data.
+    """
+    maneuver = step.get("maneuver") or {}
+    m_type = maneuver.get("type", "")
+    modifier = maneuver.get("modifier", "")
+    name = (step.get("name") or "").strip()
+
+    if m_type == "depart":
+        if name:
+            return f"Head {modifier} on {name}".strip() if modifier else f"Head on {name}"
+        return f"Depart {modifier}".strip().capitalize() if modifier else "Depart on route"
+    elif m_type == "arrive":
+        return "Arrive at destination"
+    elif m_type == "turn":
+        if name:
+            return f"Turn {modifier} onto {name}".strip() if modifier else f"Turn onto {name}"
+        return f"Turn {modifier}".strip().capitalize() if modifier else "Turn"
+    elif m_type in ("end of road", "end_of_road"):
+        if name:
+            return f"Turn {modifier} at end of road onto {name}".strip() if modifier else f"Turn at end of road onto {name}"
+        return f"Turn {modifier} at end of road".strip().capitalize() if modifier else "Turn at end of road"
+    elif m_type == "fork":
+        if name:
+            return f"Keep {modifier} at the fork onto {name}".strip() if modifier else f"Take the fork onto {name}"
+        return f"Keep {modifier} at the fork".strip().capitalize() if modifier else "Take the fork"
+    elif m_type == "roundabout":
+        if name:
+            return f"Take the roundabout onto {name}"
+        return "Take the roundabout"
+    elif m_type == "continue":
+        if name:
+            return f"Continue {modifier} on {name}".strip() if modifier else f"Continue on {name}"
+        return f"Continue {modifier}".strip().capitalize() if modifier else "Continue straight"
+    else:
+        clean_type = m_type.replace("_", " ").capitalize()
+        action = f"{clean_type} {modifier}".strip() if modifier else clean_type
+        if name:
+            return f"{action} onto {name}"
+        return action if action else "Continue on route"
+
+
 def convert_osrm_route(route: dict) -> dict:
     """
     Convert one OSRM route into the RAASTA route format.
@@ -125,12 +168,32 @@ def convert_osrm_route(route: dict) -> dict:
         for coordinate in coordinates
     ]
 
+    turn_by_turn = []
+    for leg in route.get("legs", []):
+        for step in leg.get("steps", []):
+            maneuver = step.get("maneuver") or {}
+            loc = maneuver.get("location") or [0, 0]
+            turn_by_turn.append(
+                {
+                    "instruction": format_osrm_instruction(step),
+                    "distance_meters": round(float(step.get("distance", 0.0)), 1),
+                    "duration_seconds": round(float(step.get("duration", 0.0)), 1),
+                    "coordinates": {
+                        "lat": loc[1],
+                        "lng": loc[0],
+                    },
+                    "maneuver_type": maneuver.get("type", ""),
+                    "modifier": maneuver.get("modifier", ""),
+                }
+            )
+
     return {
         "coordinates": coordinates,
         "distance": route["distance"],
         "duration": route["duration"],
         "distance_meters": route["distance"],
         "duration_seconds": route["duration"],
+        "turn_by_turn": turn_by_turn,
     }
 
 
