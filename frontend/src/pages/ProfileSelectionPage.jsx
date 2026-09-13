@@ -1,13 +1,7 @@
 import React from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { ACCESSIBILITY_PROFILES } from '../data/mockData';
-import { 
-  Check, 
-  Sliders, 
-  ArrowRight, 
-  Sparkles, 
-  ShieldCheck 
-} from 'lucide-react';
+import { Check, Sliders, ArrowLeft } from 'lucide-react';
 
 export default function ProfileSelectionPage() {
   const {
@@ -16,158 +10,176 @@ export default function ProfileSelectionPage() {
     preferences,
     setPreferences,
     setCurrentStep,
-    triggerHaptic,
-    showVisualToast
+    showVisualToast,
+    triggerHaptic
   } = useNavigation();
 
-  const handleTogglePreference = (key) => {
+  const selectedProfile = ACCESSIBILITY_PROFILES.find(
+    profile => profile.id === selectedProfileId
+  );
+
+  const toggle = (key) => {
     setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
-    triggerHaptic([40, 20]);
+    if (triggerHaptic) triggerHaptic([30]);
   };
 
   return (
-    <div className="p-4 space-y-5 pb-8 animate-fade-in">
-      
-      {/* Title */}
-      <div className="space-y-1">
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700/80 text-emerald-400 text-[10px] font-bold">
-          Step 2 of 6: Profile Selection
+    <div className="w-full max-w-lg mx-auto p-4 space-y-4 pb-28 animate-fade-in">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setCurrentStep('map')}
+          className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">
+            Accessibility Profile
+          </div>
+          <h2 className="text-xl font-bold text-white tracking-tight">
+            Navigation Settings
+          </h2>
         </div>
-        <h2 className="text-xl font-bold text-white font-display">
-          How do you travel?
-        </h2>
-        <p className="text-xs text-slate-400">
-          Pick your mobility profile to personalize route choices, warnings, and alerts.
-        </p>
       </div>
 
-      {/* Profiles List */}
-      <div className="space-y-2.5">
-        {ACCESSIBILITY_PROFILES.map((profile) => {
-          const isSelected = selectedProfileId === profile.id;
+      {/* Active Profile Banner */}
+      <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+        <div>
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+            Active Profile
+          </div>
+          <div className="mt-0.5 text-sm font-bold text-white">
+            {selectedProfile?.name || 'Accessibility profile'}
+          </div>
+        </div>
+        <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold">
+          Active
+        </span>
+      </div>
 
-          return (
-            <div
-              key={profile.id}
-              onClick={() => {
-                handleSelectProfile(profile.id);
-                triggerHaptic([60, 30]);
-                showVisualToast({
-                  title: `${profile.name} Selected`,
-                  subtitle: `Navigation adjusted for ${profile.badge}`,
-                  type: 'info'
-                });
-              }}
-              className={`p-3.5 rounded-2xl border transition-all duration-150 touch-active cursor-pointer ${
-                isSelected
-                  ? 'bg-emerald-950/25 border-emerald-500 shadow-md ring-1 ring-emerald-500/80'
-                  : 'bg-[#131b2e] border-slate-800 hover:border-slate-700'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl flex-shrink-0">
-                    {profile.symbol}
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white">
+      {/* Profile Choices */}
+      <div className="space-y-2">
+        {ACCESSIBILITY_PROFILES
+          .filter(profile => profile.id === 'wheelchair' || profile.id === 'deaf')
+          .map(profile => {
+            const selected = selectedProfileId === profile.id;
+
+            return (
+              <button
+                key={profile.id}
+                type="button"
+                onClick={() => {
+                  handleSelectProfile(profile.id);
+                  if (triggerHaptic) triggerHaptic([40, 20]);
+                  showVisualToast({
+                    title: `${profile.name} Selected`,
+                    subtitle: 'Settings updated for your next route.',
+                    type: 'success'
+                  });
+                }}
+                className={`w-full text-left p-3.5 rounded-2xl border transition-all touch-active ${
+                  selected
+                    ? 'bg-emerald-950/30 border-emerald-500/80 ring-1 ring-emerald-500/60'
+                    : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-white">
                       {profile.name}
-                    </h3>
-                    <span className="text-[10px] text-emerald-400 font-medium">
+                    </div>
+                    <div className="text-[10px] text-emerald-400 mt-0.5 font-medium">
                       {profile.badge}
-                    </span>
+                    </div>
+                  </div>
+
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    selected
+                      ? 'bg-emerald-500 text-slate-950'
+                      : 'border border-slate-700'
+                  }`}>
+                    {selected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                   </div>
                 </div>
 
-                {isSelected ? (
-                  <div className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-[10px]">
-                    <Check className="w-3.5 h-3.5" />
-                  </div>
-                ) : (
-                  <div className="w-4 h-4 rounded-full border border-slate-700" />
-                )}
-              </div>
-
-              <p className="text-[11px] text-slate-300 mt-2 leading-relaxed">
-                {profile.description}
-              </p>
-            </div>
-          );
-        })}
+                <p className="text-[11px] text-slate-300 mt-2 leading-relaxed">
+                  {profile.description}
+                </p>
+              </button>
+            );
+          })}
       </div>
 
-      {/* Granular Preference Toggles */}
-      <div className="p-4 rounded-2xl bg-[#131b2e] border border-slate-800 space-y-3">
+      {/* Preferences Section */}
+      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
         <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
           <Sliders className="w-4 h-4 text-emerald-400" />
-          <h3 className="text-xs font-bold text-white font-display">
-            Personal Preferences
-          </h3>
+          <h3 className="text-xs font-bold text-white">Route Preferences</h3>
         </div>
 
-        <div className="space-y-2">
-          {/* Avoid Stairs */}
-          <div 
-            onClick={() => handleTogglePreference('avoidStairs')}
-            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer touch-active ${
-              preferences.avoidStairs ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-            }`}
-          >
-            <div>
-              <div className="text-xs font-bold text-white">Avoid All Stairs 🚫</div>
-              <div className="text-[10px] text-slate-400">Strictly step-free paths</div>
-            </div>
-            <div className={`w-8 h-4 rounded-full flex items-center p-0.5 ${preferences.avoidStairs ? 'bg-emerald-500 justify-end' : 'bg-slate-800 justify-start'}`}>
-              <div className="w-3 h-3 rounded-full bg-white" />
-            </div>
-          </div>
+        <PreferenceToggle
+          title="Avoid all stairs"
+          description="Prefer strictly step-free paths"
+          enabled={preferences.avoidStairs}
+          onClick={() => toggle('avoidStairs')}
+        />
 
-          {/* Prioritize Ramps */}
-          <div 
-            onClick={() => handleTogglePreference('needsRamp')}
-            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer touch-active ${
-              preferences.needsRamp ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-            }`}
-          >
-            <div>
-              <div className="text-xs font-bold text-white">Require Gentle Ramps 📐</div>
-              <div className="text-[10px] text-slate-400">1:12 slope with handrails</div>
-            </div>
-            <div className={`w-8 h-4 rounded-full flex items-center p-0.5 ${preferences.needsRamp ? 'bg-emerald-500 justify-end' : 'bg-slate-800 justify-start'}`}>
-              <div className="w-3 h-3 rounded-full bg-white" />
-            </div>
-          </div>
+        <PreferenceToggle
+          title="Require gentle ramps"
+          description="Prefer ramped paths where available"
+          enabled={preferences.needsRamp}
+          onClick={() => toggle('needsRamp')}
+        />
 
-          {/* Visual Navigation Cues */}
-          <div 
-            onClick={() => handleTogglePreference('visualHapticAlerts')}
-            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer touch-active ${
-              preferences.visualHapticAlerts ? 'bg-cyan-950/40 border-cyan-500/60 text-cyan-300' : 'bg-slate-900 border-slate-800 text-slate-400'
-            }`}
-          >
-            <div>
-              <div className="text-xs font-bold text-white">Visual Navigation Cues 🦻</div>
-              <div className="text-[10px] text-slate-400">High-visibility banners &amp; subtitles</div>
-            </div>
-            <div className={`w-8 h-4 rounded-full flex items-center p-0.5 ${preferences.visualHapticAlerts ? 'bg-cyan-500 justify-end' : 'bg-slate-800 justify-start'}`}>
-              <div className="w-3 h-3 rounded-full bg-white" />
-            </div>
-          </div>
-        </div>
+        <PreferenceToggle
+          title="Visual navigation cues"
+          description="High-visibility banners and visual alerts"
+          enabled={preferences.visualHapticAlerts}
+          onClick={() => toggle('visualHapticAlerts')}
+        />
       </div>
 
-      {/* Next CTA */}
+      {/* Save Settings Button */}
       <button
+        type="button"
         onClick={() => {
-          setCurrentStep('destination');
-          triggerHaptic([50]);
+          setCurrentStep('map');
+          showVisualToast({
+            title: 'Profile Saved',
+            subtitle: 'Ready to navigate on the map.',
+            type: 'success'
+          });
         }}
-        className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md touch-active cursor-pointer"
+        className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-colors touch-active"
       >
-        <span>Set Destination</span>
-        <ArrowRight className="w-4 h-4" />
+        Save & Return to Map
       </button>
-
     </div>
+  );
+}
+
+function PreferenceToggle({ title, description, enabled, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-3 text-left transition-all ${
+        enabled
+          ? 'bg-emerald-950/25 border-emerald-500/40'
+          : 'bg-slate-950 border-slate-800'
+      }`}
+    >
+      <div className="min-w-0">
+        <div className="text-xs font-bold text-white">{title}</div>
+        <div className="text-[10px] text-slate-400">{description}</div>
+      </div>
+
+      <div className={`w-9 h-5 rounded-full flex items-center p-0.5 flex-shrink-0 transition-colors ${
+        enabled ? 'bg-emerald-500 justify-end' : 'bg-slate-800 justify-start'
+      }`}>
+        <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
+      </div>
+    </button>
   );
 }
