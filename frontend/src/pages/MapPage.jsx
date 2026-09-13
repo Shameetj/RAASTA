@@ -379,30 +379,30 @@ export default function MapPage() {
   };
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto h-[calc(100dvh-6rem)] min-h-0 flex flex-col overflow-hidden bg-neutral-950 font-sans px-2 pt-2 pb-24 gap-2">
+    <div className="relative w-full max-w-2xl mx-auto h-[calc(100dvh-6rem)] min-h-0 flex flex-col overflow-hidden bg-slate-950 font-sans px-2 pt-2 pb-24 gap-2">
       <div className="w-full flex items-center justify-between px-1 py-1 flex-shrink-0">
         <div className="text-sm font-semibold tracking-tight text-white">RAASTA</div>
-        <div className="text-[10px] text-stone-500">
+        <div className="text-[10px] text-slate-400">
           {selectedProfile?.name || 'Accessibility profile'}
         </div>
       </div>
 
       <div className="w-full px-0.5 pb-1 flex-shrink-0">
-        <div className="px-3 py-2 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-between">
+        <div className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
           <div className="min-w-0">
-            <div className="text-[9px] uppercase tracking-wider text-stone-500 font-semibold">Destination</div>
+            <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Destination</div>
             <div className="text-xs font-medium text-white truncate">
               {destination?.name || 'Tap the map to select'}
             </div>
           </div>
-          <div className="text-[9px] text-stone-500 ml-3 flex-shrink-0">Tap map to change</div>
+          <div className="text-[9px] text-slate-400 ml-3 flex-shrink-0">Tap map to change</div>
         </div>
       </div>
 
       {/* Main map — tap anywhere to place a destination waypoint. */}
       {/* 3. Real OpenStreetMap Leaflet Map (Centerpiece) */}
       <div
-        className="w-full flex-1 relative bg-stone-900 z-0 min-h-0 rounded-2xl overflow-hidden border border-stone-800 shadow-lg"
+        className="w-full flex-1 relative bg-slate-900 z-0 min-h-0 rounded-2xl overflow-hidden border border-slate-800 shadow-lg"
         style={{ touchAction: 'none' }}
       >
         <MapContainer
@@ -469,12 +469,12 @@ export default function MapPage() {
             />
           )}
 
-          {/* Accessible Step-Free Route (Amber/Orange) */}
+          {/* Accessible Step-Free Route (Emerald Green) */}
           {routeReadyForDestination && accessibleRouteCoords.length >= 2 && (
             <Polyline
               positions={accessibleRouteCoords}
               pathOptions={{
-                color: '#f59e0b',
+                color: '#10b981',
                 weight: 6,
                 opacity: 0.95
               }}
@@ -488,10 +488,10 @@ export default function MapPage() {
               icon={userLiveIcon}
             >
               <Popup>
-                <div className="text-xs font-bold text-stone-900">
-                  <div> Your Current Location</div>
+                <div className="text-xs font-bold text-slate-900">
+                  <div>📍 Your Current Location</div>
                   {gpsAccuracy != null && (
-                    <div className="text-[10px] text-stone-600 font-normal">
+                    <div className="text-[10px] text-slate-600 font-normal">
                       Accuracy: ±{Math.round(Number(gpsAccuracy))} m
                     </div>
                   )}
@@ -504,9 +504,9 @@ export default function MapPage() {
           {hasSelectedMapDestination && destLat != null && destLng != null && (
             <Marker position={[destLat, destLng]} icon={destIcon}>
               <Popup>
-                <div className="text-xs font-bold text-stone-900">
-                  <div> {destination.name}</div>
-                  <div className="text-[10px] text-stone-600 font-normal">{destination.address}</div>
+                <div className="text-xs font-bold text-slate-900">
+                  <div>🎯 {destination.name}</div>
+                  <div className="text-[10px] text-slate-600 font-normal">{destination.address}</div>
                 </div>
               </Popup>
             </Marker>
@@ -521,12 +521,12 @@ export default function MapPage() {
             return (
               <Marker key={b.id || `barrier-${idx}`} position={[bLat, bLng]} icon={obstacleIcon}>
                 <Popup>
-                  <div className="p-1 text-stone-900">
+                  <div className="p-1 text-slate-900">
                     <div className="text-xs font-bold flex items-center gap-1">
-                      <span>️</span>
+                      <span>⚠️</span>
                       <span>{b.title || 'Reported Obstacle'}</span>
                     </div>
-                    <div className="text-[11px] text-stone-700 mt-0.5">{b.description || 'Stairs blocking sidewalk'}</div>
+                    <div className="text-[11px] text-slate-700 mt-0.5">{b.description || 'Stairs blocking sidewalk'}</div>
                     <div className="text-[10px] font-semibold text-rose-600 mt-1 uppercase">
                       Severity: {b.severity || 'High'}
                     </div>
@@ -546,7 +546,7 @@ export default function MapPage() {
                           console.error('[RAASTA] Remove blockage failed:', error);
                         }
                       }}
-                      className="mt-3 w-full py-2 rounded-lg bg-stone-800 border border-stone-700 text-xs font-bold text-rose-400 hover:bg-rose-950/40"
+                      className="mt-3 w-full py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs font-bold text-rose-400 hover:bg-rose-950/40"
                     >
                       Remove Report
                     </button>
@@ -559,15 +559,15 @@ export default function MapPage() {
         </MapContainer>
         {/* Loading Overlay */}
         {isCalculatingRoute && (
-          <div className="absolute top-3 left-3 right-3 z-[1000] p-3 rounded-xl bg-stone-900/95 border border-amber-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
-            <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <div className="absolute top-3 left-3 right-3 z-[1000] p-3 rounded-xl bg-slate-900/95 border border-emerald-500/60 shadow-xl flex items-center gap-3 animate-fade-in">
+            <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
             <div className="text-xs font-bold text-white">Calculating safest accessible route...</div>
           </div>
         )}
       </div>
 
       {/* 4. Bottom Route & Accessibility Status Panel */}
-      <div className="w-full flex-shrink-0 p-3 bg-stone-900/95 border border-stone-800 rounded-2xl shadow-lg space-y-3 z-[1000]">
+      <div className="w-full flex-shrink-0 p-3 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-lg space-y-3 z-[1000]">
 
         {/* Backend Alert / Reroute Notification */}
         {routes?.accessible?.rerouted && (
@@ -576,7 +576,7 @@ export default function MapPage() {
             <div className="min-w-0 flex-1 leading-snug">
               <span className="font-bold text-amber-300">Blockage detected: </span>
               <span>{routes.accessible.alerts?.[0]?.message || 'Stairs blocking direct pathway.'} </span>
-              <span className="text-orange-400 font-bold"> Alternative route active.</span>
+              <span className="text-emerald-400 font-bold">✓ Alternative route active.</span>
             </div>
           </div>
         )}
@@ -595,8 +595,8 @@ export default function MapPage() {
         {/* Route Stats & Action Buttons */}
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
-              <span></span>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+              <span>♿</span>
               <span>{routes?.accessible?.rerouted ? 'Alternative Route' : 'Accessible Route'}</span>
             </div>
             <div className="text-sm font-extrabold text-white">
@@ -661,7 +661,7 @@ export default function MapPage() {
               }}
               className={`py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 touch-active transition-all min-w-[138px] ${isNavSimulating
                 ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                : 'bg-orange-600 hover:bg-orange-500 text-white shadow-md'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
                 }`}
             >
               {isNavSimulating ? (

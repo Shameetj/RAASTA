@@ -8,10 +8,10 @@
  * Dev2 may need to query OSRM multiple times.
  */
 
-const PRIMARY_URL = import.meta.env.VITE_API_URL || '/api';
+const PRIMARY_URL = import.meta.env.VITE_API_URL || 'https://gear-holders-obituaries-fonts.trycloudflare.com/api';
 
 const LOCAL_FALLBACK_URL =
-  'http://localhost:8000/api';
+  '/api';
 
 const SERVER_ERROR_MESSAGE =
   'Unable to connect to RAASTA server. Please try again.';

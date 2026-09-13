@@ -35,7 +35,7 @@ const destinationIcon = L.divIcon({
       width: 38px;
       height: 38px;
       border-radius: 50% 50% 50% 0;
-      background: #f97316;
+      background: #06b6d4;
       border: 3px solid white;
       transform: rotate(-45deg);
       box-shadow: 0 4px 12px rgba(0,0,0,.45);
@@ -279,13 +279,13 @@ export default function DestinationPage() {
       --------------------------------------------------- */}
 
       {isLoadingRoutes && (
-        <div className="fixed inset-0 z-50 bg-[#120e0b]/92 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+        <div className="fixed inset-0 z-50 bg-[#0a0f1d]/92 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fade-in">
 
           <div className="relative mb-5">
 
-            <div className="w-20 h-20 rounded-full bg-amber-500/20 animate-ping absolute inset-0 m-auto" />
+            <div className="w-20 h-20 rounded-full bg-emerald-500/20 animate-ping absolute inset-0 m-auto" />
 
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-white shadow-xl relative z-10 border border-amber-400/40">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-xl relative z-10 border border-emerald-400/40">
 
               <Route className="w-8 h-8 animate-pulse" />
 
@@ -297,33 +297,33 @@ export default function DestinationPage() {
             Finding accessible route...
           </h3>
 
-          <p className="text-xs text-stone-300 max-w-[280px] mb-5 leading-relaxed">
+          <p className="text-xs text-slate-300 max-w-[280px] mb-5 leading-relaxed">
 
             Calculating the safest accessible route to your selected destination.
 
           </p>
 
-          <div className="w-full max-w-xs bg-[#1f1714] border border-stone-800 rounded-2xl p-3.5 space-y-2.5 text-left mb-4 shadow-xl">
+          <div className="w-full max-w-xs bg-[#131b2e] border border-slate-800 rounded-2xl p-3.5 space-y-2.5 text-left mb-4 shadow-xl">
 
-            <div className="flex items-center gap-2.5 text-xs text-stone-300">
+            <div className="flex items-center gap-2.5 text-xs text-slate-300">
 
-              <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
 
               <span>Checking accessible paths</span>
 
             </div>
 
-            <div className="flex items-center gap-2.5 text-xs text-stone-300">
+            <div className="flex items-center gap-2.5 text-xs text-slate-300">
 
-              <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
 
               <span>Evaluating ramps and sidewalks</span>
 
             </div>
 
-            <div className="flex items-center gap-2.5 text-xs text-stone-300">
+            <div className="flex items-center gap-2.5 text-xs text-slate-300">
 
-              <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
 
               <span>Finding the safest route</span>
 
@@ -331,9 +331,9 @@ export default function DestinationPage() {
 
           </div>
 
-          <div className="w-full max-w-xs h-1.5 bg-stone-800 rounded-full overflow-hidden">
+          <div className="w-full max-w-xs h-1.5 bg-slate-800 rounded-full overflow-hidden">
 
-            <div className="h-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-300 rounded-full animate-pulse w-full" />
+            <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300 rounded-full animate-pulse w-full" />
 
           </div>
 
@@ -347,7 +347,7 @@ export default function DestinationPage() {
 
       <div className="space-y-1">
 
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-stone-900 border border-stone-700/80 text-amber-400 text-[10px] font-bold">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700/80 text-emerald-400 text-[10px] font-bold">
 
           Step 3 of 6: Destination
 
@@ -359,7 +359,7 @@ export default function DestinationPage() {
 
         </h2>
 
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-slate-400">
 
           Tap anywhere on the map to choose your destination.
 
@@ -372,11 +372,11 @@ export default function DestinationPage() {
           Starting Location
       --------------------------------------------------- */}
 
-      <div className="p-3 rounded-2xl bg-[#1f1714] border border-stone-800 flex items-center justify-between">
+      <div className="p-3 rounded-2xl bg-[#131b2e] border border-slate-800 flex items-center justify-between">
 
         <div className="flex items-center gap-2.5">
 
-          <div className="w-7 h-7 rounded-lg bg-orange-950 border border-orange-800/80 flex items-center justify-center text-amber-400">
+          <div className="w-7 h-7 rounded-lg bg-emerald-950 border border-emerald-800/80 flex items-center justify-center text-emerald-400">
 
             <Navigation className="w-3.5 h-3.5" />
 
@@ -384,7 +384,7 @@ export default function DestinationPage() {
 
           <div>
 
-            <div className="text-[10px] uppercase text-stone-400 font-bold tracking-wider">
+            <div className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
               Start Origin
             </div>
 
@@ -396,7 +396,7 @@ export default function DestinationPage() {
 
         </div>
 
-        <span className="text-[9px] px-2 py-0.5 rounded bg-stone-900 text-stone-300 border border-stone-700">
+        <span className="text-[9px] px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700">
           Current Location
         </span>
 
@@ -412,14 +412,14 @@ export default function DestinationPage() {
         className="relative flex items-center"
       >
 
-        <Search className="absolute left-3.5 w-4 h-4 text-stone-400" />
+        <Search className="absolute left-3.5 w-4 h-4 text-slate-400" />
 
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search a place or tap the map..."
-          className="w-full pl-10 pr-12 py-2.5 rounded-2xl bg-[#1f1714] border border-stone-700 focus:border-amber-500 text-white placeholder-stone-400 text-xs font-medium"
+          className="w-full pl-10 pr-12 py-2.5 rounded-2xl bg-[#131b2e] border border-slate-700 focus:border-emerald-500 text-white placeholder-slate-400 text-xs font-medium"
         />
 
         <button
@@ -427,7 +427,7 @@ export default function DestinationPage() {
           onClick={handleVoiceSearchSim}
           className={`absolute right-2.5 p-1.5 rounded-lg ${isVoiceListening
             ? 'bg-red-500 text-white animate-pulse'
-            : 'bg-stone-800 text-stone-300'
+            : 'bg-slate-800 text-slate-300'
             }`}
           title="Voice Search"
         >
@@ -447,7 +447,7 @@ export default function DestinationPage() {
           Map
       --------------------------------------------------- */}
 
-      <div className="rounded-3xl overflow-hidden border border-stone-800 bg-[#1f1714] shadow-xl">
+      <div className="rounded-3xl overflow-hidden border border-slate-800 bg-[#131b2e] shadow-xl">
 
         <div className="relative h-[390px]">
 
@@ -483,11 +483,11 @@ export default function DestinationPage() {
           {/* Map instruction */}
 
           {!hasDestination && (
-            <div className="absolute left-1/2 bottom-4 -translate-x-1/2 z-[500] px-4 py-2.5 rounded-2xl bg-neutral-950/90 backdrop-blur-md border border-stone-700 shadow-xl text-center pointer-events-none">
+            <div className="absolute left-1/2 bottom-4 -translate-x-1/2 z-[500] px-4 py-2.5 rounded-2xl bg-slate-950/90 backdrop-blur-md border border-slate-700 shadow-xl text-center pointer-events-none">
 
               <div className="flex items-center gap-2 text-white text-xs font-bold">
 
-                <MapPin className="w-4 h-4 text-orange-400" />
+                <MapPin className="w-4 h-4 text-cyan-400" />
 
                 Tap the map to select a destination
 
@@ -502,21 +502,21 @@ export default function DestinationPage() {
           {hasDestination && (
             <div className="absolute left-3 right-3 bottom-3 z-[500]">
 
-              <div className="p-3 rounded-2xl bg-neutral-950/90 backdrop-blur-md border border-orange-500/40 shadow-xl">
+              <div className="p-3 rounded-2xl bg-slate-950/90 backdrop-blur-md border border-cyan-500/40 shadow-xl">
 
                 <div className="flex items-center justify-between gap-3">
 
                   <div className="flex items-center gap-2 min-w-0">
 
-                    <div className="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
 
-                      <MapPin className="w-4 h-4 text-orange-400" />
+                      <MapPin className="w-4 h-4 text-cyan-400" />
 
                     </div>
 
                     <div className="min-w-0">
 
-                      <div className="text-[9px] uppercase tracking-wider text-stone-500 font-bold">
+                      <div className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">
                         Destination
                       </div>
 
@@ -530,11 +530,11 @@ export default function DestinationPage() {
 
                   <div className="text-right flex-shrink-0">
 
-                    <div className="text-[9px] text-stone-500">
+                    <div className="text-[9px] text-slate-500">
                       Coordinates
                     </div>
 
-                    <div className="text-[10px] text-amber-300 font-mono">
+                    <div className="text-[10px] text-cyan-300 font-mono">
                       {selectedPoint.lat.toFixed(5)},
                       {' '}
                       {selectedPoint.lng.toFixed(5)}
@@ -558,11 +558,11 @@ export default function DestinationPage() {
           Selection hint
       --------------------------------------------------- */}
 
-      <div className="flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-stone-900/70 border border-stone-800">
+      <div className="flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-slate-900/70 border border-slate-800">
 
-        <LocateFixed className="w-4 h-4 text-amber-400 flex-shrink-0" />
+        <LocateFixed className="w-4 h-4 text-emerald-400 flex-shrink-0" />
 
-        <p className="text-[11px] text-stone-400">
+        <p className="text-[11px] text-slate-400">
 
           Choose any point on the map. RAASTA will calculate an accessible route to that exact location.
 
@@ -619,7 +619,7 @@ export default function DestinationPage() {
               onClick={() => {
                 setApiError(null);
               }}
-              className="py-2.5 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 font-bold text-xs"
+              className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs"
             >
 
               Dismiss
@@ -641,8 +641,8 @@ export default function DestinationPage() {
         disabled={isLoadingRoutes || !hasDestination}
         onClick={handleShowAccessibleRoutes}
         className={`w-full py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md touch-active cursor-pointer transition-all ${hasDestination
-          ? 'bg-orange-600 hover:bg-orange-500 text-white'
-          : 'bg-stone-800 text-stone-500 cursor-not-allowed'
+          ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+          : 'bg-slate-800 text-slate-500 cursor-not-allowed'
           }`}
       >
 
