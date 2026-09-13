@@ -1,50 +1,96 @@
 /**
- * Cloudflare Pages Function: Route Proxy to Dev1 Backend
- * Authoritative Path: React -> Dev1 -> Dev2 -> OSRM -> React
+ * Cloudflare Pages Function: Route Proxy to Dev1 / Dev2 Backend
+ * Authoritative Path: React -> CF Pages -> Dev1 (with instant fallback to Dev2) -> React
  */
 
 export async function onRequestPost(context) {
+  const startTime = Date.now();
+  let body;
   try {
-    console.log('[RAASTA DEBUG] Cloudflare function /api/routes/calculate received');
-    const startTime = Date.now();
-    const body = await context.request.json();
-    console.log('[RAASTA DEBUG] Request body:', body);
-    const dev1Url = context.env?.DEV1_URL || 'https://raasta-dev1.onrender.com';
-    console.log('[RAASTA DEBUG] Forwarding request to Dev1 at', dev1Url);
-
-    const dev1Start = Date.now();
-    const res = await fetch(`${dev1Url}/api/routes/calculate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body)
-    });
-    const dev1Duration = Date.now() - dev1Start;
-    console.log('[RAASTA DEBUG] Dev1 response status:', res.status, 'duration ms:', dev1Duration);
-    const data = await res.json();
-    console.log('[RAASTA DEBUG] Dev1 response JSON:', data);
-    console.log('[RAASTA DEBUG] Total Cloudflare duration (ms):', Date.now() - startTime);
-    return new Response(JSON.stringify(data), {
-      status: res.status,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
+    body = await context.request.json();
   } catch (err) {
-    console.error('[RAASTA DEBUG] Cloudflare function error:', err);
-    return new Response(JSON.stringify({
-      success: false,
-      message: 'RAASTA accessibility routing engine unavailable. Real route calculation required.'
-    }), {
-      status: 503,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
+    return new Response(JSON.stringify({ success: false, message: 'Invalid request body' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
   }
+
+  const dev1Url = context.env?.DEV1_URL || 'https://raasta-dev1.onrender.com';
+  const dev2Url = context.env?.DEV2_URL || 'https://raasta-dev2.onrender.com';
+
+  // 1. Try Dev1 backend first with an 8-second timeout
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(`${dev1Url}/api/routes/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success) {
+        return new Response(JSON.stringify(data), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
+    }
+  } catch (dev1Err) {
+    console.warn('[RAASTA CF] Dev1 unreachable or timed out, routing directly to Dev2:', dev1Err.message);
+  }
+
+  // 2. Resilient fallback directly to Dev2 routing engine
+  try {
+    const controller2 = new AbortController();
+    const timeoutId2 = setTimeout(() => controller2.abort(), 25000);
+
+    const dev2Payload = {
+      start: body.start,
+      destination: body.destination,
+      profile: body.profile || 'wheelchair',
+      active_blockages: Array.isArray(body.blockages) ? body.blockages : (body.active_blockages || [])
+    };
+
+    const res2 = await fetch(`${dev2Url}/route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dev2Payload),
+      signal: controller2.signal
+    });
+    clearTimeout(timeoutId2);
+
+    if (res2.ok) {
+      const data2 = await res2.json();
+      return new Response(JSON.stringify(data2), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+  } catch (dev2Err) {
+    console.error('[RAASTA CF] Dev2 routing fallback error:', dev2Err);
+  }
+
+  return new Response(JSON.stringify({
+    success: false,
+    message: 'RAASTA accessibility routing engine unavailable. Please try again in a moment.'
+  }), {
+    status: 503,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    }
+  });
 }
 
 export async function onRequestOptions() {

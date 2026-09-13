@@ -144,12 +144,12 @@ export async function calculateRoute({ start, destination, profile, blockages = 
 
   console.log('[RAASTA DEBUG] 4. requestRouteCalculation() START - Payload:', payload);
   const routeStartTime = Date.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
-  let response;
-  let result;
+
+  // 1. Primary path: /api/routes/calculate (with 8s timeout)
   try {
-    response = await fetch('/api/routes/calculate', {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch('/api/routes/calculate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -158,19 +158,51 @@ export async function calculateRoute({ start, destination, profile, blockages = 
       body: JSON.stringify(payload),
       signal: controller.signal
     });
-    console.log('[RAASTA DEBUG] 5. API response status:', response.status);
-    const responseTime = Date.now() - routeStartTime;
-    console.log(`[RAASTA DEBUG] API response received in ${responseTime}ms`);
-    result = await response.json();
-    console.log('[RAASTA DEBUG] 6. complete response JSON:', JSON.stringify(result));
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('[RAASTA DEBUG] 5. API response status:', response.status);
+      console.log(`[RAASTA DEBUG] API response received in ${Date.now() - routeStartTime}ms`);
+      if (result && result.success) {
+        return result;
+      }
+    }
   } catch (err) {
-    console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION in API fetch /api/routes/calculate:', err);
-    clearTimeout(timeoutId);
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
+    console.warn('[RAASTA DEBUG] Primary /api/routes/calculate route failed or timed out:', err.message);
   }
-  return result;
+
+  // 2. Direct fallback to Dev2 routing engine (fast & direct)
+  console.log('[RAASTA DEBUG] Executing direct Dev2 fallback route calculation...');
+  try {
+    const controller2 = new AbortController();
+    const timeoutId2 = setTimeout(() => controller2.abort(), 20000);
+    const fallbackResponse = await fetch('https://raasta-dev2.onrender.com/route', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        start: payload.start,
+        destination: payload.destination,
+        profile: payload.profile,
+        active_blockages: payload.blockages || []
+      }),
+      signal: controller2.signal
+    });
+    clearTimeout(timeoutId2);
+
+    if (fallbackResponse.ok) {
+      const fallbackResult = await fallbackResponse.json();
+      console.log(`[RAASTA DEBUG] Dev2 direct fallback succeeded in ${Date.now() - routeStartTime}ms`);
+      return fallbackResult;
+    }
+    throw new Error(`Routing failed with status ${fallbackResponse.status}`);
+  } catch (fallbackErr) {
+    console.error('[RAASTA DEBUG] 18. CAUGHT EXCEPTION in Dev2 direct fallback:', fallbackErr);
+    throw fallbackErr;
+  }
 }
 
 export async function reportBlockage(blockageData) {
