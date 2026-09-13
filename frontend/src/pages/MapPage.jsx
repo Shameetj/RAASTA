@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import {
   MapContainer,
@@ -15,6 +15,7 @@ import {
   Play,
   Square,
   AlertTriangle,
+  Navigation
 } from 'lucide-react';
 
 // Leaflet Map Resizer to ensure tiles render immediately when tab switches
@@ -33,6 +34,54 @@ function MapResizer() {
     };
   }, [map]);
   return null;
+}
+
+// Automatically centers the map at the user's real GPS position on reload/acquisition
+function UserLocationMapCenterer({ userLocation, hasCalculatedRoute }) {
+  const map = useMap();
+  const hasCenteredRef = useRef(false);
+
+  useEffect(() => {
+    // If a route is already calculated, RouteBoundsFitter handles the framing.
+    if (hasCalculatedRoute) return;
+
+    if (userLocation?.lat != null && userLocation?.lng != null && !hasCenteredRef.current) {
+      hasCenteredRef.current = true;
+      map.setView([Number(userLocation.lat), Number(userLocation.lng)], 16, {
+        animate: true
+      });
+    }
+  }, [userLocation?.lat, userLocation?.lng, hasCalculatedRoute, map]);
+
+  return null;
+}
+
+// Floating button to re-center the map on user's current GPS location
+function RecenterControl({ userLocation }) {
+  const map = useMap();
+
+  return (
+    <div
+      className="leaflet-bottom leaflet-right"
+      style={{ marginBottom: '35px', marginRight: '12px', pointerEvents: 'auto' }}
+    >
+      <button
+        type="button"
+        title="Center on my location"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (userLocation?.lat != null && userLocation?.lng != null) {
+            map.setView([Number(userLocation.lat), Number(userLocation.lng)], 16, {
+              animate: true
+            });
+          }
+        }}
+        className="w-9 h-9 rounded-xl bg-slate-900/95 border border-slate-700 text-emerald-400 shadow-xl flex items-center justify-center hover:bg-slate-800 transition-all touch-active"
+      >
+        <Navigation className="w-4 h-4" />
+      </button>
+    </div>
+  );
 }
 
 function DestinationMapPicker({ onSelect }) {
@@ -279,6 +328,15 @@ export default function MapPage() {
 
           {/* Map resizer to ensure tiles render immediately */}
           <MapResizer />
+
+          {/* Automatically center map on user's live GPS location on reload */}
+          <UserLocationMapCenterer
+            userLocation={userLocation}
+            hasCalculatedRoute={hasCalculatedRoute}
+          />
+
+          {/* Floating Re-center button */}
+          <RecenterControl userLocation={userLocation} />
 
           {/* Fit map view only after route is calculated */}
           <RouteBoundsFitter

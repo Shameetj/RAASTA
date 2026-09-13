@@ -50,12 +50,41 @@ const INITIAL_ROUTES_STATE = {
   }
 };
 
+const SAVED_GPS_KEY = 'raasta_last_known_gps';
+
+function getStoredLocation() {
+  try {
+    const saved = localStorage.getItem(SAVED_GPS_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed?.lat === 'number' && typeof parsed?.lng === 'number') {
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 export function NavigationProvider({ children }) {
   const [currentStep, setCurrentStep] = useState('map'); // 'map' | 'destination' | 'report' | 'results' | 'profile'
   const [selectedProfileId, setSelectedProfileId] = useState('wheelchair');
   const [preferences, setPreferences] = useState(ACCESSIBILITY_PROFILES[0].defaultPreferences);
 
-  const [origin, setOrigin] = useState(INITIAL_ORIGIN);
+  const [origin, setOrigin] = useState(() => {
+    const saved = getStoredLocation();
+    if (saved) {
+      return {
+        id: 'origin-current',
+        name: 'Current Location',
+        subtitle: 'Live GPS Location',
+        coordinates: {
+          lat: saved.lat,
+          lng: saved.lng
+        }
+      };
+    }
+    return INITIAL_ORIGIN;
+  });
   const [destination, setDestination] = useState(DEMO_DESTINATIONS[0]);
 
   const [barriers, setBarriers] = useState(INITIAL_BARRIERS);
@@ -67,8 +96,8 @@ export function NavigationProvider({ children }) {
   const [isNavSimulating, setIsNavSimulating] = useState(false);
   const [currentSimSegment, setCurrentSimSegment] = useState(0);
 
-  // Real browser GPS state
-  const [userLocation, setUserLocation] = useState(null);
+  // Real browser GPS state - initialized from last known location if available
+  const [userLocation, setUserLocation] = useState(getStoredLocation);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [locationError, setLocationError] = useState(null);
 
@@ -108,6 +137,11 @@ export function NavigationProvider({ children }) {
           '[RAASTA] 📍 Initial real GPS location:',
           livePosition
         );
+
+        // Save to localStorage for instant centering on next reload
+        try {
+          localStorage.setItem(SAVED_GPS_KEY, JSON.stringify(livePosition));
+        } catch (e) {}
 
         // Make the real phone GPS the app origin.
         setUserLocation(livePosition);
@@ -535,6 +569,9 @@ export function NavigationProvider({ children }) {
     console.log('[RAASTA] 📍 Real GPS position:', livePosition);
 
     setUserLocation(livePosition);
+    try {
+      localStorage.setItem(SAVED_GPS_KEY, JSON.stringify(livePosition));
+    } catch (e) {}
     setGpsAccuracy(accuracy ?? null);
     setLocationError(null);
 
