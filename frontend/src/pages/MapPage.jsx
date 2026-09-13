@@ -37,15 +37,32 @@ function MapResizer() {
   return null;
 }
 
-// Automatically centers the map at the user's real GPS position on reload/acquisition
-function UserLocationMapCenterer({ userLocation, hasCalculatedRoute }) {
+// Automatically centers the map at the user's real GPS position on reload/acquisition, keeps still during guidance, and relocates to GPS when guidance stops
+function UserLocationMapCenterer({ userLocation, hasCalculatedRoute, isNavSimulating }) {
   const map = useMap();
   const hasCenteredRef = useRef(false);
-  const lastCoordsRef = useRef(null);
+  const wasGuidingRef = useRef(false);
 
   useEffect(() => {
-    // If a route is already calculated, RouteBoundsFitter handles the framing.
-    if (hasCalculatedRoute) return;
+    const isGuiding = hasCalculatedRoute || isNavSimulating;
+
+    // Transition: user just stopped guidance -> relocate map to current GPS location
+    if (wasGuidingRef.current && !isGuiding) {
+      wasGuidingRef.current = false;
+      if (userLocation?.lat != null && userLocation?.lng != null) {
+        const lat = Number(userLocation.lat);
+        const lng = Number(userLocation.lng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          map.setView([lat, lng], 16, { animate: true });
+        }
+      }
+      return;
+    }
+
+    wasGuidingRef.current = isGuiding;
+
+    // While route guidance is active, NEVER auto-pan or re-center — map stays perfectly still for waypoint viewing
+    if (isGuiding) return;
 
     if (userLocation?.lat != null && userLocation?.lng != null) {
       const lat = Number(userLocation.lat);
@@ -53,27 +70,13 @@ function UserLocationMapCenterer({ userLocation, hasCalculatedRoute }) {
 
       if (isNaN(lat) || isNaN(lng)) return;
 
-      // First time real GPS is acquired: center immediately and zoom in
+      // First time real GPS is acquired on initial load: center immediately and zoom in once
       if (!hasCenteredRef.current) {
         hasCenteredRef.current = true;
-        lastCoordsRef.current = { lat, lng };
-        map.setView([lat, lng], 16, {
-          animate: true
-        });
-        return;
-      }
-
-      // If position changed / refined significantly (> 30 meters)
-      if (lastCoordsRef.current) {
-        const dLat = Math.abs(lat - lastCoordsRef.current.lat);
-        const dLng = Math.abs(lng - lastCoordsRef.current.lng);
-        if (dLat > 0.0003 || dLng > 0.0003) {
-          lastCoordsRef.current = { lat, lng };
-          map.panTo([lat, lng], { animate: true });
-        }
+        map.setView([lat, lng], 16, { animate: true });
       }
     }
-  }, [userLocation?.lat, userLocation?.lng, hasCalculatedRoute, map]);
+  }, [userLocation?.lat, userLocation?.lng, hasCalculatedRoute, isNavSimulating, map]);
 
   return null;
 }
@@ -150,12 +153,20 @@ function MapViewportWatcher({ onViewportChange }) {
   return null;
 }
 
-// Fits map bounds smoothly only after the user starts guidance and a route is calculated
+// Fits map bounds smoothly only ONCE when a route is first calculated, so the map stays still while user inspects waypoints
 function RouteBoundsFitter({ currentCoords, destCoords, accessibleCoords, hasCalculatedRoute }) {
   const map = useMap();
+  const framedRouteKeyRef = useRef(null);
 
   useEffect(() => {
     if (!hasCalculatedRoute || !destCoords?.lat || !destCoords?.lng) {
+      framedRouteKeyRef.current = null;
+      return;
+    }
+
+    const routeKey = `${destCoords.lat.toFixed(4)}_${destCoords.lng.toFixed(4)}_${accessibleCoords?.length || 0}`;
+    if (framedRouteKeyRef.current === routeKey) {
+      // Already framed once for this route; keep map still so user can freely pan and view waypoints
       return;
     }
 
@@ -175,6 +186,7 @@ function RouteBoundsFitter({ currentCoords, destCoords, accessibleCoords, hasCal
 
     try {
       const bounds = L.latLngBounds(points);
+      framedRouteKeyRef.current = routeKey;
       map.fitBounds(bounds, {
         padding: [50, 50],
         maxZoom: 17,
@@ -183,7 +195,7 @@ function RouteBoundsFitter({ currentCoords, destCoords, accessibleCoords, hasCal
     } catch (e) {
       console.warn('[Map] Route bounds warning:', e);
     }
-  }, [hasCalculatedRoute, destCoords?.lat, destCoords?.lng, accessibleCoords, map]);
+  }, [hasCalculatedRoute, destCoords?.lat, destCoords?.lng, accessibleCoords?.length, map]);
 
   return null;
 }
@@ -496,10 +508,11 @@ export default function MapPage() {
           {/* Map resizer to ensure tiles render immediately */}
           <MapResizer />
 
-          {/* Automatically center map on user's live GPS location on reload */}
+          {/* Automatically center map on user's live GPS location on reload and relocate on stop */}
           <UserLocationMapCenterer
             userLocation={userLocation}
             hasCalculatedRoute={hasCalculatedRoute}
+            isNavSimulating={isNavSimulating}
           />
 
           {/* Floating Re-center button */}
