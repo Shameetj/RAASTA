@@ -203,6 +203,18 @@ function RouteBoundsFitter({ currentCoords, destCoords, accessibleCoords, hasCal
   return null;
 }
 
+// Listens to click/tap events anywhere on the map to pin/move destination directly
+function MapClickHandler({ onMapClick }) {
+  useMapEvents({
+    click(e) {
+      if (e?.latlng && onMapClick) {
+        onMapClick(e.latlng);
+      }
+    }
+  });
+  return null;
+}
+
 // Leaflet DivIcon helper
 const createDivIcon = (htmlContent, size = [36, 36]) => {
   return L.divIcon({
@@ -281,6 +293,40 @@ export default function MapPage() {
     currentViewportRef.current = { lat, lon: lng, radius, limit };
     loadIncidents({ lat, lon: lng, radius, limit });
   }, [loadIncidents]);
+
+  // Allows user to click/pinpoint anywhere directly on the Leaflet map to set/move destination
+  const handleMapClick = useCallback((latlng) => {
+    if (!latlng) return;
+    const lat = Number(latlng.lat);
+    const lng = Number(latlng.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    // Reset previous calculated route cleanly so user can press Start Guidance for new point
+    if (isNavSimulating || hasCalculatedRoute) {
+      stopGpsGuidance();
+      setHasCalculatedRoute(false);
+      setShowExplanation(false);
+    }
+
+    const pinnedDestination = {
+      id: `custom-pin-${Date.now()}`,
+      name: `Pinned (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+      subtitle: 'Pinned on Map',
+      category: 'Map Pin',
+      coordinates: {
+        lat: Number(lat.toFixed(6)),
+        lng: Number(lng.toFixed(6))
+      }
+    };
+
+    setDestination(pinnedDestination);
+    if (triggerHaptic) triggerHaptic([30]);
+    showVisualToast({
+      title: 'Destination Pinned',
+      subtitle: 'Tap "Start Guidance" to calculate accessible path',
+      type: 'info'
+    });
+  }, [isNavSimulating, hasCalculatedRoute, stopGpsGuidance, setDestination, triggerHaptic, showVisualToast]);
 
   // Periodic refresh (every 45s) while map screen is active
   useEffect(() => {
@@ -571,6 +617,9 @@ export default function MapPage() {
             maxZoom={19}
           />
 
+          {/* Click / Tap anywhere on the map to pin destination directly */}
+          <MapClickHandler onMapClick={handleMapClick} />
+
           {/* Dynamic pan & zoom watcher to fetch live incidents */}
           <MapViewportWatcher
             onViewportChange={handleViewportChange}
@@ -813,6 +862,14 @@ export default function MapPage() {
           })}
 
         </MapContainer>
+
+        {/* Map Pinpoint Instruction Banner (when not guiding) */}
+        {!hasCalculatedRoute && !isNavSimulating && !isCalculatingRoute && (
+          <div className="absolute top-3 left-3 z-[500] pointer-events-none bg-slate-900/90 backdrop-blur-md border border-cyan-500/60 rounded-xl px-2.5 py-1.5 shadow-xl flex items-center gap-2 text-[11px] font-semibold text-cyan-200 animate-fade-in">
+            <MapPin className="w-3.5 h-3.5 text-cyan-400 animate-pulse flex-shrink-0" />
+            <span>Tap anywhere on map to pin destination</span>
+          </div>
+        )}
 
         {/* Active Guidance Top Banner Overlay on Map */}
         {(hasCalculatedRoute || isNavSimulating) && (
