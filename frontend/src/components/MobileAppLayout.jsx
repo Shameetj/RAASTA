@@ -1,10 +1,6 @@
 import React from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { 
-  Sun, 
-  Moon, 
-  AlertTriangle, 
-  BarChart3, 
   Accessibility, 
   EarOff, 
   Eye, 
@@ -17,11 +13,7 @@ export default function MobileAppLayout({ children }) {
     selectedProfileId, 
     setCurrentStep, 
     isHighContrast, 
-    setIsHighContrast,
-    triggerHaptic,
-    setEmergencyStrobeActive,
-    setCivicModalOpen,
-    isHapticVibrating
+    triggerHaptic 
   } = useNavigation();
 
   const getProfileIcon = () => {
@@ -70,43 +62,11 @@ export default function MobileAppLayout({ children }) {
               setCurrentStep('profile');
               triggerHaptic([40]);
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-700/80 text-xs font-semibold text-slate-200 touch-active"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-xs font-semibold text-slate-200 touch-active hover:bg-slate-800 transition-colors"
           >
             {getProfileIcon()}
-            <span className="text-[11px] max-w-[80px] truncate">{selectedProfile.name.split(' ')[0]}</span>
-            <span className="text-[10px] text-emerald-400">{selectedProfile.symbol}</span>
-          </button>
-
-          {/* Emergency Alert Drill (Deaf Mode) */}
-          <button
-            onClick={() => {
-              setEmergencyStrobeActive(true);
-            }}
-            className="p-2 rounded-xl bg-red-950/40 border border-red-800/40 text-red-400 hover:bg-red-900/50 touch-active"
-            title="Emergency Strobe Drill"
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Civic Dashboard */}
-          <button
-            onClick={() => {
-              setCivicModalOpen(true);
-              triggerHaptic([40]);
-            }}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 touch-active"
-            title="Civic Portal"
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* High Contrast */}
-          <button
-            onClick={() => setIsHighContrast(!isHighContrast)}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-amber-400 touch-active"
-            title="High Contrast"
-          >
-            {isHighContrast ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5" />}
+            <span className="text-[12px] font-medium">{selectedProfile.name.split(' ')[0]}</span>
+            <span className="text-[11px] text-emerald-400 font-bold">{selectedProfile.symbol}</span>
           </button>
         </div>
       </header>
