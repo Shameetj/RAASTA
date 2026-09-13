@@ -7,7 +7,7 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #0b0f19;
   color: #f1f5f9;
   -webkit-tap-highlight-color: transparent;
@@ -18,7 +18,6 @@ h1, h2, h3, h4, h5, h6, .font-display {
   letter-spacing: -0.015em;
 }
 
-/* Friendly Card Styles */
 .human-card {
   background-color: #131b2e;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -30,13 +29,11 @@ h1, h2, h3, h4, h5, h6, .font-display {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Touch feedback */
 .touch-active:active {
   transform: scale(0.98);
   transition: transform 0.1s ease-out;
 }
 
-/* High Contrast Mode */
 .high-contrast-mode {
   background-color: #000000 !important;
   color: #ffffff !important;
@@ -48,7 +45,6 @@ h1, h2, h3, h4, h5, h6, .font-display {
   border: 2px solid #ffffff !important;
 }
 
-/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -63,7 +59,6 @@ h1, h2, h3, h4, h5, h6, .font-display {
   border-radius: 9999px;
 }
 
-/* Leaflet Overrides */
 .leaflet-container {
   width: 100% !important;
   height: 100% !important;
@@ -107,3 +102,5 @@ h1, h2, h3, h4, h5, h6, .font-display {
   background: none !important;
   border: none !important;
 }
+
+/* RAASTA: keep the original accessibility-focused UI styling intact. */
