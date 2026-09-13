@@ -21,6 +21,9 @@ RAASTA is a Progressive Web App (PWA). You can install it directly onto your pho
 - The **RAASTA app icon** will appear on your home screen, launching full-screen with instant GPS location locking.
 
 ---
+## Project Explanation Video
+
+[Watch the Project Explanation Video](https://drive.google.com/file/d/14G4n6z0QqWI508lV9ZUWTs0CEilRuC6H/view?usp=drivesdk)
 
 ## 🎯 What is RAASTA?
 
