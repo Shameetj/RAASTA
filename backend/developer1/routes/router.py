@@ -12,9 +12,8 @@ from .schemas import RouteCalculateRequest
 
 DEV2_ROUTING_URL = os.getenv(
     "DEV2_ROUTING_URL",
-    "http://127.0.0.1:8001/route",
+    "http://26.228.125.133:8001/route",
 )
-
 router = APIRouter(
     prefix="/api/routes",
     tags=["Routes"],
