@@ -40,16 +40,37 @@ function MapResizer() {
 function UserLocationMapCenterer({ userLocation, hasCalculatedRoute }) {
   const map = useMap();
   const hasCenteredRef = useRef(false);
+  const lastCoordsRef = useRef(null);
 
   useEffect(() => {
     // If a route is already calculated, RouteBoundsFitter handles the framing.
     if (hasCalculatedRoute) return;
 
-    if (userLocation?.lat != null && userLocation?.lng != null && !hasCenteredRef.current) {
-      hasCenteredRef.current = true;
-      map.setView([Number(userLocation.lat), Number(userLocation.lng)], 16, {
-        animate: true
-      });
+    if (userLocation?.lat != null && userLocation?.lng != null) {
+      const lat = Number(userLocation.lat);
+      const lng = Number(userLocation.lng);
+
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      // First time real GPS is acquired: center immediately and zoom in
+      if (!hasCenteredRef.current) {
+        hasCenteredRef.current = true;
+        lastCoordsRef.current = { lat, lng };
+        map.setView([lat, lng], 16, {
+          animate: true
+        });
+        return;
+      }
+
+      // If position changed / refined significantly (> 30 meters)
+      if (lastCoordsRef.current) {
+        const dLat = Math.abs(lat - lastCoordsRef.current.lat);
+        const dLng = Math.abs(lng - lastCoordsRef.current.lng);
+        if (dLat > 0.0003 || dLng > 0.0003) {
+          lastCoordsRef.current = { lat, lng };
+          map.panTo([lat, lng], { animate: true });
+        }
+      }
     }
   }, [userLocation?.lat, userLocation?.lng, hasCalculatedRoute, map]);
 

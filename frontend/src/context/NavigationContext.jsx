@@ -52,39 +52,17 @@ const INITIAL_ROUTES_STATE = {
 
 const SAVED_GPS_KEY = 'raasta_last_known_gps';
 
-function getStoredLocation() {
-  try {
-    const saved = localStorage.getItem(SAVED_GPS_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (typeof parsed?.lat === 'number' && typeof parsed?.lng === 'number') {
-        return parsed;
-      }
-    }
-  } catch (e) {}
-  return null;
-}
-
 export function NavigationProvider({ children }) {
   const [currentStep, setCurrentStep] = useState('map'); // 'map' | 'destination' | 'report' | 'results' | 'profile'
   const [selectedProfileId, setSelectedProfileId] = useState('wheelchair');
   const [preferences, setPreferences] = useState(ACCESSIBILITY_PROFILES[0].defaultPreferences);
 
-  const [origin, setOrigin] = useState(() => {
-    const saved = getStoredLocation();
-    if (saved) {
-      return {
-        id: 'origin-current',
-        name: 'Current Location',
-        subtitle: 'Live GPS Location',
-        coordinates: {
-          lat: saved.lat,
-          lng: saved.lng
-        }
-      };
-    }
-    return INITIAL_ORIGIN;
-  });
+  const [origin, setOrigin] = useState(() => ({
+    id: 'origin-current',
+    name: 'Current Location',
+    subtitle: 'Acquiring GPS...',
+    coordinates: null
+  }));
   const [destination, setDestination] = useState(DEMO_DESTINATIONS[0]);
 
   const [barriers, setBarriers] = useState(INITIAL_BARRIERS);
@@ -96,24 +74,29 @@ export function NavigationProvider({ children }) {
   const [isNavSimulating, setIsNavSimulating] = useState(false);
   const [currentSimSegment, setCurrentSimSegment] = useState(0);
 
-  // Real browser GPS state - initialized from last known location if available
-  const [userLocation, setUserLocation] = useState(getStoredLocation);
+  // Real browser/device GPS state - strictly null initially so no fake marker ever flashes
+  const [userLocation, setUserLocation] = useState(null);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [locationError, setLocationError] = useState(null);
 
-  // Continuously track real mobile/browser GPS location from the moment the app loads.
-  // This ensures the map centers on the user's actual mobile location immediately on reload.
+  // Automatically and immediately acquire real mobile/browser GPS location on app load
   useEffect(() => {
+    // Clear any legacy mock or stale cached location so it never flashes a fake spot
+    try {
+      localStorage.removeItem(SAVED_GPS_KEY);
+    } catch (e) {}
+
     if (
       typeof navigator === 'undefined' ||
       !navigator.geolocation
     ) {
+      console.warn('[RAASTA] Geolocation not supported by this browser.');
       return;
     }
 
-    console.log('[RAASTA] Starting real mobile GPS watch on app load...');
+    console.log('[RAASTA] 🛰️ Initializing live device GPS on app load...');
 
-    const onLocationSuccess = (position) => {
+    const applyLivePosition = (position, source = 'network') => {
       const {
         latitude,
         longitude,
@@ -128,10 +111,11 @@ export function NavigationProvider({ children }) {
         accuracy: accuracy ?? null,
         heading: heading ?? null,
         speed: speed ?? null,
-        timestamp: position.timestamp
+        timestamp: position.timestamp,
+        isRealGps: true
       };
 
-      console.log('[RAASTA] 📍 Live mobile GPS fix:', livePosition);
+      console.log(`[RAASTA] 📍 Live device GPS fix (${source}):`, livePosition);
 
       try {
         localStorage.setItem(SAVED_GPS_KEY, JSON.stringify(livePosition));
@@ -144,6 +128,7 @@ export function NavigationProvider({ children }) {
       setOrigin((prev) => ({
         ...prev,
         name: 'Current Location',
+        subtitle: 'Live GPS Location',
         coordinates: {
           lat: latitude,
           lng: longitude
@@ -152,20 +137,32 @@ export function NavigationProvider({ children }) {
     };
 
     const onLocationError = (error) => {
-      console.warn('[RAASTA] Mobile GPS watch warning:', error);
+      console.warn('[RAASTA] Live GPS watch warning:', error);
       if (error.code === 1) {
         setLocationError(
-          'Location permission denied. Allow location access to center on your current position.'
+          'Location permission denied. Allow location access in your browser to center on your current position.'
         );
       }
     };
 
+    // 1. Fast Network/Wi-Fi fix: returns in <150ms on mobile devices
+    navigator.geolocation.getCurrentPosition(
+      (pos) => applyLivePosition(pos, 'fast-network'),
+      (err) => console.warn('[RAASTA] Fast initial GPS error:', err),
+      {
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 60000
+      }
+    );
+
+    // 2. High-Accuracy Satellite Watch: continuous real-time precision updates
     const watchId = navigator.geolocation.watchPosition(
-      onLocationSuccess,
+      (pos) => applyLivePosition(pos, 'high-accuracy-watch'),
       onLocationError,
       {
         enableHighAccuracy: true,
-        timeout: 30000,
+        timeout: 25000,
         maximumAge: 2000
       }
     );
