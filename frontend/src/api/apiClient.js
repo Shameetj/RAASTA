@@ -67,11 +67,20 @@ export async function fetchLocations() {
 }
 
 export async function fetchBlockages() {
-  return await resilientFetch(
-    '/blockages',
-    { headers: { Accept: 'application/json' } },
-    10000
-  );
+  try {
+    return await resilientFetch(
+      '/blockages',
+      { headers: { Accept: 'application/json' } },
+      5000
+    );
+  } catch (err) {
+    console.warn('[RAASTA API] Backend offline, loading local blockages:', err);
+    try {
+      const stored = localStorage.getItem('raasta_local_blockages');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return [];
+  }
 }
 
 export async function calculateRoute({ start, destination, profile }) {
@@ -197,22 +206,48 @@ export async function reportBlockage(blockageData) {
     })()
   };
 
-  return await resilientFetch(
-    '/blockages',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json'
+  try {
+    return await resilientFetch(
+      '/blockages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify(payload)
       },
-      body: JSON.stringify(payload)
-    },
-    10000
-  );
+      6000
+    );
+  } catch (err) {
+    console.warn('[RAASTA API] Backend offline, saving blockage locally:', err);
+    const localId = `local-${Date.now()}`;
+    const newBlockage = {
+      id: localId,
+      ...payload
+    };
+    try {
+      const stored = localStorage.getItem('raasta_local_blockages');
+      const list = stored ? JSON.parse(stored) : [];
+      list.unshift(newBlockage);
+      localStorage.setItem('raasta_local_blockages', JSON.stringify(list));
+    } catch (e) {}
+    return {
+      success: true,
+      id: localId,
+      blockage: newBlockage,
+      offline: true
+    };
+  }
 }
 
 export async function resetDemoData() {
-  return await resilientFetch('/demo/reset', { method: 'POST' }, 10000);
+  try {
+    return await resilientFetch('/demo/reset', { method: 'POST' }, 5000);
+  } catch (e) {
+    localStorage.removeItem('raasta_local_blockages');
+    return { success: true };
+  }
 }
 
 export async function deleteBlockage(blockageId) {
@@ -220,8 +255,20 @@ export async function deleteBlockage(blockageId) {
     throw new Error('Blockage ID is required');
   }
 
-  return await resilientFetch(`/blockages/${blockageId}`, {
-    method: 'DELETE',
-    headers: { Accept: 'application/json' }
-  });
+  try {
+    return await resilientFetch(`/blockages/${blockageId}`, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json' }
+    }, 5000);
+  } catch (err) {
+    console.warn('[RAASTA API] Backend offline, removing blockage locally:', err);
+    try {
+      const stored = localStorage.getItem('raasta_local_blockages');
+      if (stored) {
+        const list = JSON.parse(stored).filter(b => String(b.id) !== String(blockageId));
+        localStorage.setItem('raasta_local_blockages', JSON.stringify(list));
+      }
+    } catch (e) {}
+    return { success: true, deleted: blockageId, offline: true };
+  }
 }
