@@ -453,6 +453,7 @@ export default function MapPage() {
           <div className="flex-shrink-0 flex items-center justify-center">
             {/* Start / Stop Guidance Button */}
             <button
+              disabled={isCalculatingRoute}
               onClick={async () => {
                 if (isNavSimulating || hasCalculatedRoute) {
                   stopGpsGuidance();
@@ -496,9 +497,14 @@ export default function MapPage() {
               className={`py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 touch-active transition-all min-w-[138px] ${isNavSimulating || hasCalculatedRoute
                 ? 'bg-rose-600 hover:bg-rose-500 text-white'
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
-                }`}
+                } ${isCalculatingRoute ? 'opacity-80 cursor-wait' : ''}`}
             >
-              {isNavSimulating || hasCalculatedRoute ? (
+              {isCalculatingRoute ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Calculating...</span>
+                </>
+              ) : isNavSimulating || hasCalculatedRoute ? (
                 <>
                   <Square className="w-3.5 h-3.5 fill-current" />
                   <span>Stop</span>
