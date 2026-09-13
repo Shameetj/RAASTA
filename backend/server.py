@@ -8,6 +8,7 @@ import http.server
 import socketserver
 import json
 import urllib.parse
+import urllib.request
 import sys
 
 PORT = 8000
@@ -140,84 +141,111 @@ class RaastaAPIHandler(http.server.BaseHTTPRequestHandler):
             dest_lat = float(destination.get('latitude', 15.4950))
             dest_lng = float(destination.get('longitude', 73.8310))
 
-            has_blockages = len(BLOCKAGES) > 0
-            is_wheelchair = profile == 'wheelchair'
-
-            if is_wheelchair and has_blockages:
-                # Alternative route (A -> D -> C) detouring around stairs at B
-                mid_lat = (start_lat + dest_lat) / 2
-                mid_lng = (start_lng + dest_lng) / 2
-                
-                accessible_coords = [
-                    [start_lat, start_lng],
-                    [start_lat + 0.0008, start_lng + 0.0005],
-                    [mid_lat + 0.0012, mid_lng - 0.0008], # Detour point D (Ramp)
-                    [mid_lat + 0.0018, mid_lng + 0.0005],
-                    [dest_lat - 0.0004, dest_lng - 0.0002],
-                    [dest_lat, dest_lng]
-                ]
-
-                direct_blocked_coords = [
-                    [start_lat, start_lng],
-                    [15.4900, 73.8270], # Blocked point B (Stairs)
-                    [dest_lat, dest_lng]
-                ]
-
-                response = {
-                    "success": True,
-                    "message": "Blockage detected on direct path. Alternative accessible route calculated.",
+            # 1. Try real Developer 2 routing service on port 8001
+            dev2_success = False
+            response = None
+            try:
+                dev2_payload = json.dumps({
+                    "start": {"latitude": start_lat, "longitude": start_lng},
+                    "destination": {"latitude": dest_lat, "longitude": dest_lng},
                     "profile": profile,
-                    "rerouted": True,
-                    "route": {
-                        "coordinates": accessible_coords,
-                        "distance_meters": 485,
-                        "duration_seconds": 360
-                    },
-                    "direct_route": {
-                        "name": "Direct Route (Blocked by Stairs)",
-                        "coordinates": direct_blocked_coords,
-                        "distance_meters": 340,
-                        "duration_seconds": 230
-                    },
-                    "alerts": [
-                        {
-                            "severity": "high",
-                            "message": "Stairs blocking direct pathway. Rerouted via step-free East Promenade ramp."
-                        }
-                    ],
-                    "blockages": BLOCKAGES,
-                    "turn_by_turn": [
-                        {"instruction": "Head northeast on accessible tactile pavement", "distance": "80m", "safe": True},
-                        {"instruction": "Turn left onto East Promenade Ramp (Bypassing stairs)", "distance": "160m", "safe": True},
-                        {"instruction": "Continue on step-free level connector", "distance": "120m", "safe": True},
-                        {"instruction": "Arrive at destination entrance via ground-level door", "distance": "125m", "safe": True}
-                    ]
-                }
-            else:
-                accessible_coords = [
-                    [start_lat, start_lng],
-                    [(start_lat + dest_lat) / 2, (start_lng + dest_lng) / 2],
-                    [dest_lat, dest_lng]
-                ]
-                response = {
-                    "success": True,
-                    "message": "Direct step-free accessible route found.",
-                    "profile": profile,
-                    "rerouted": False,
-                    "route": {
-                        "coordinates": accessible_coords,
-                        "distance_meters": 340,
-                        "duration_seconds": 240
-                    },
-                    "alerts": [],
-                    "blockages": [],
-                    "turn_by_turn": [
-                        {"instruction": "Head along main accessible corridor", "distance": "170m", "safe": True},
-                        {"instruction": "Arrive at destination", "distance": "170m", "safe": True}
-                    ]
-                }
+                    "active_blockages": BLOCKAGES
+                }).encode('utf-8')
+                req = urllib.request.Request(
+                    "http://localhost:8001/route",
+                    data=dev2_payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=10) as dev2_res:
+                    if dev2_res.status == 200:
+                        dev2_data = json.loads(dev2_res.read().decode('utf-8'))
+                        if dev2_data.get("success"):
+                            response = dev2_data
+                            dev2_success = True
+                            print(f"[Dev2 Real Routing] Retrieved route from Dev2 on port 8001: {dev2_data.get('message')}")
+            except Exception as dev2_err:
+                print(f"[Dev2 Forwarding Warning]: {dev2_err}")
 
-            print(f"[Dev2 Routing] Calculated route for {profile}: rerouted={response['rerouted']}, distance={response['route']['distance_meters']}m")
+            if not dev2_success:
+                has_blockages = len(BLOCKAGES) > 0
+                is_wheelchair = profile == 'wheelchair'
+
+                if is_wheelchair and has_blockages:
+                    # Alternative route (A -> D -> C) detouring around stairs at B
+                    mid_lat = (start_lat + dest_lat) / 2
+                    mid_lng = (start_lng + dest_lng) / 2
+                    
+                    accessible_coords = [
+                        [start_lat, start_lng],
+                        [start_lat + 0.0008, start_lng + 0.0005],
+                        [mid_lat + 0.0012, mid_lng - 0.0008], # Detour point D (Ramp)
+                        [mid_lat + 0.0018, mid_lng + 0.0005],
+                        [dest_lat - 0.0004, dest_lng - 0.0002],
+                        [dest_lat, dest_lng]
+                    ]
+
+                    direct_blocked_coords = [
+                        [start_lat, start_lng],
+                        [15.4900, 73.8270], # Blocked point B (Stairs)
+                        [dest_lat, dest_lng]
+                    ]
+
+                    response = {
+                        "success": True,
+                        "message": "Blockage detected on direct path. Alternative accessible route calculated.",
+                        "profile": profile,
+                        "rerouted": True,
+                        "route": {
+                            "coordinates": accessible_coords,
+                            "distance_meters": 485,
+                            "duration_seconds": 360
+                        },
+                        "direct_route": {
+                            "name": "Direct Route (Blocked by Stairs)",
+                            "coordinates": direct_blocked_coords,
+                            "distance_meters": 340,
+                            "duration_seconds": 230
+                        },
+                        "alerts": [
+                            {
+                                "severity": "high",
+                                "message": "Stairs blocking direct pathway. Rerouted via step-free East Promenade ramp."
+                            }
+                        ],
+                        "blockages": BLOCKAGES,
+                        "turn_by_turn": [
+                            {"instruction": "Head northeast on accessible tactile pavement", "distance": "80m", "safe": True},
+                            {"instruction": "Turn left onto East Promenade Ramp (Bypassing stairs)", "distance": "160m", "safe": True},
+                            {"instruction": "Continue on step-free level connector", "distance": "120m", "safe": True},
+                            {"instruction": "Arrive at destination entrance via ground-level door", "distance": "125m", "safe": True}
+                        ]
+                    }
+                else:
+                    accessible_coords = [
+                        [start_lat, start_lng],
+                        [(start_lat + dest_lat) / 2, (start_lng + dest_lng) / 2],
+                        [dest_lat, dest_lng]
+                    ]
+                    response = {
+                        "success": True,
+                        "message": "Direct step-free accessible route found.",
+                        "profile": profile,
+                        "rerouted": False,
+                        "route": {
+                            "coordinates": accessible_coords,
+                            "distance_meters": 340,
+                            "duration_seconds": 240
+                        },
+                        "alerts": [],
+                        "blockages": [],
+                        "turn_by_turn": [
+                            {"instruction": "Head along main accessible corridor", "distance": "170m", "safe": True},
+                            {"instruction": "Arrive at destination", "distance": "170m", "safe": True}
+                        ]
+                    }
+
+            dist = response.get('route', {}).get('distance') or response.get('route', {}).get('distance_meters') or 0
+            print(f"[Dev2 Routing] Calculated route for {profile}: rerouted={response.get('rerouted')}, distance={dist}m")
             self._send_json(200, response)
 
         elif path in ('/api/demo/reset', '/api/demo/reset/'):

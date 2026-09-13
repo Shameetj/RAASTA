@@ -213,8 +213,15 @@ export function NavigationProvider({ children }) {
         );
 
         // 3. Extract actual backend distance, duration, rerouted status, alerts
-        const distanceMeters = routeData.distance_meters !== undefined ? Number(routeData.distance_meters) : null;
-        const durationSeconds = routeData.duration_seconds !== undefined ? Number(routeData.duration_seconds) : null;
+        const rawDistance = routeData.distance_meters !== undefined
+          ? Number(routeData.distance_meters)
+          : (routeData.distance !== undefined ? Number(routeData.distance) : null);
+        const distanceMeters = rawDistance !== null ? Math.round(rawDistance * 10) / 10 : null;
+
+        const rawDuration = routeData.duration_seconds !== undefined
+          ? Number(routeData.duration_seconds)
+          : (routeData.duration !== undefined ? Number(routeData.duration) : null);
+        const durationSeconds = rawDuration !== null ? Number(rawDuration) : null;
         const durationMinutes = durationSeconds !== null ? Math.max(1, Math.round(durationSeconds / 60)) : null;
         const isRerouted = Boolean(result.rerouted);
         const alertsList = Array.isArray(result.alerts) ? result.alerts : (Array.isArray(result.visual_alerts) ? result.visual_alerts : []);

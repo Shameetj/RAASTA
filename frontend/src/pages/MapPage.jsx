@@ -154,15 +154,15 @@ export default function MapPage() {
     ? normalizeCoordinatesList(routes.fastest.coordinates)
     : [];
 
-  // Destination marker pinned on map
+  // Destination marker pinned on map — Cyan target matching original app design
   const destIcon = createDivIcon(
     `<div style="
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
-      background: #f97316;
+      background: #06b6d4;
       border: 3px solid white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.4);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -174,16 +174,30 @@ export default function MapPage() {
         background: white;
       "></div>
     </div>`,
-    [24, 24]
+    [26, 26]
   );
 
-  // User Current Location marker — stays firmly anchored at user's position
+  // User Current Location marker — Emerald green target matching original app design
   const userLiveIcon = createDivIcon(
-    `<div class="relative flex items-center justify-center">
-      <div class="w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-md z-10"></div>
-      <div class="absolute w-8 h-8 rounded-full bg-emerald-500/30 animate-ping"></div>
+    `<div style="
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #10b981;
+      border: 3px solid white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <div style="
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: white;
+      "></div>
     </div>`,
-    [32, 32]
+    [26, 26]
   );
 
   const obstacleIcon = createDivIcon(
@@ -235,27 +249,7 @@ export default function MapPage() {
   };
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto h-[calc(100dvh-6rem)] min-h-0 flex flex-col overflow-hidden bg-slate-950 font-sans px-2 pt-2 pb-24 gap-2">
-      <div className="w-full flex items-center justify-between px-1 py-1 flex-shrink-0">
-        <div className="text-sm font-semibold tracking-tight text-white">RAASTA</div>
-        <div className="text-[10px] text-slate-400">
-          {selectedProfile?.name || 'Accessibility profile'}
-        </div>
-      </div>
-
-      <div className="w-full px-0.5 pb-1 flex-shrink-0">
-        <div className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-          <div className="min-w-0">
-            <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Destination</div>
-            <div className="text-xs font-medium text-white truncate">
-              {destination?.name || 'Tap the map to select'}
-            </div>
-          </div>
-          <div className="text-[9px] text-slate-400 ml-3 flex-shrink-0">Tap map to change</div>
-        </div>
-      </div>
-
-      {/* Main map — tap anywhere to place a destination waypoint. */}
+    <div className="relative w-full max-w-2xl mx-auto h-[calc(100dvh-5.5rem)] min-h-0 flex flex-col overflow-hidden bg-slate-950 font-sans px-2 pt-1 pb-20 gap-2">
       {/* 3. Real OpenStreetMap Leaflet Map (Centerpiece) */}
       <div
         className="w-full flex-1 relative bg-slate-900 z-0 min-h-0 rounded-2xl overflow-hidden border border-slate-800 shadow-lg"
@@ -409,7 +403,7 @@ export default function MapPage() {
             <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1 leading-snug">
               <span className="font-bold text-amber-300">Blockage detected: </span>
-              <span>{routes.accessible.alerts?.[0]?.message || 'Stairs blocking direct pathway.'} </span>
+              <span>{routes.accessible.alerts?.[0]?.message || 'Accessibility blockage detected. Finding an alternative route.'} </span>
               <span className="text-emerald-400 font-bold">✓ Alternative route active.</span>
             </div>
           </div>
